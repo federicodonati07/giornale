@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Card } from "@heroui/react"
 import Image from "next/image"
-import { getDatabase, ref, query, limitToLast, get, orderByChild } from "firebase/database"
+import { getDatabase, ref, query, limitToLast, get } from "firebase/database"
 import { getApps, getApp, initializeApp } from "firebase/app"
 
 // Configura Firebase se non è già inizializzato
