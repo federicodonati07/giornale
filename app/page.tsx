@@ -5,23 +5,8 @@ import { Button } from "@heroui/react"
 import { FiHeart, FiUser, FiLogOut, FiPlus, FiChevronDown, FiList } from "react-icons/fi"
 import { FeaturedNews } from "./components/FeaturedNews"
 import Link from "next/link"
-import { initializeApp, getApps, getApp } from "firebase/app"
-import { getAuth, onAuthStateChanged, signOut, User } from "firebase/auth"
-
-// Configura Firebase
-const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-  databaseURL: "https://giornalino-c2682-default-rtdb.europe-west1.firebasedatabase.app/"
-}
-
-// Inizializza Firebase solo se non è già stato inizializzato
-const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig)
-const auth = getAuth(app)
+import { onAuthStateChanged, signOut, User } from "firebase/auth"
+import { auth } from "./firebase"
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
