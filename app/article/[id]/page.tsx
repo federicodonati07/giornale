@@ -21,6 +21,7 @@ interface ArticleData {
   view: number
   partecipanti?: string[]
   likes?: string[]
+  additionalLinks?: Array<{ url: string, label: string }>
 }
 
 export default function Article() {
@@ -300,9 +301,22 @@ export default function Article() {
 
           {/* Info e metriche */}
           <div className="flex flex-wrap items-center justify-between gap-4 mb-8 text-sm">
-            <div className="flex items-center gap-4 text-zinc-600 dark:text-zinc-400">
-              <span className="font-medium">di {article.autore}</span>
-              <span className="flex items-center">
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-zinc-900 dark:text-zinc-50">Autore:</span>
+                <span className="text-zinc-600 dark:text-zinc-400">{article.autore}</span>
+              </div>
+              {article.partecipanti && (
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-zinc-900 dark:text-zinc-50">Partecipanti:</span>
+                  <span className="text-zinc-600 dark:text-zinc-400">
+                    {Array.isArray(article.partecipanti) 
+                      ? article.partecipanti.join(', ')
+                      : article.partecipanti}
+                  </span>
+                </div>
+              )}
+              <span className="flex items-center text-zinc-600 dark:text-zinc-400">
                 <FiClock className="mr-1 h-4 w-4" />
                 {getTimeAgo(article.creazione)}
               </span>
@@ -336,32 +350,80 @@ export default function Article() {
 
           {/* Contenuto */}
           <div 
-            className="prose prose-zinc dark:prose-invert max-w-none mb-12"
-            dangerouslySetInnerHTML={{ __html: article.contenuto }}
-          />
+            className="prose prose-zinc dark:prose-invert max-w-none mb-12
+              prose-headings:font-montserrat prose-headings:tracking-wider prose-headings:text-zinc-900 dark:prose-headings:text-zinc-50
+              prose-h1:text-4xl prose-h2:text-3xl prose-h3:text-2xl
+              prose-a:text-amber-500 hover:prose-a:text-amber-600 dark:prose-a:text-amber-400 dark:hover:prose-a:text-amber-300
+              prose-strong:text-zinc-900 dark:prose-strong:text-zinc-50
+              prose-ul:list-disc prose-ol:list-decimal
+              prose-li:text-lg prose-li:tracking-wider prose-li:text-zinc-700 dark:prose-li:text-zinc-300"
+          >
+            <span 
+              className="text-lg leading-9 tracking-[0.04em] text-zinc-700 dark:text-zinc-300
+                font-montserrat block space-y-6 [&>p]:mb-6 
+                [&>p]:leading-relaxed [&>p]:tracking-wide
+                [&>*]:tracking-wide [&>*]:leading-relaxed"
+              dangerouslySetInnerHTML={{ __html: article.contenuto }}
+            />
+          </div>
+
+          {/* Link aggiuntivi con design minimal */}
+          {article.additionalLinks && article.additionalLinks.length > 0 && (
+            <div className="border-t border-zinc-200 dark:border-zinc-700 pt-6 mt-8">
+              <h3 className="text-sm font-medium text-zinc-500 dark:text-zinc-400 mb-4">
+                Link correlati
+              </h3>
+              <div className="flex flex-wrap gap-3">
+                {article.additionalLinks.map((link, index) => (
+                  <a
+                    key={index}
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-sm text-amber-500 hover:text-amber-600 
+                      dark:text-amber-400 dark:hover:text-amber-300 transition-colors duration-200"
+                  >
+                    <span>{link.label}</span>
+                    <svg 
+                      className="h-3.5 w-3.5 opacity-70" 
+                      fill="none" 
+                      viewBox="0 0 24 24" 
+                      stroke="currentColor"
+                    >
+                      <path 
+                        strokeLinecap="round" 
+                        strokeLinejoin="round" 
+                        strokeWidth={2} 
+                        d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" 
+                      />
+                    </svg>
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Footer con info e metriche ripetute */}
           <div className="border-t border-zinc-200 dark:border-zinc-700 pt-8">
             <div className="flex flex-wrap items-center justify-between gap-4 text-sm">
-              <div className="flex flex-col gap-2">
-                <span className="font-medium text-zinc-900 dark:text-zinc-50">Autore</span>
-                <span className="text-zinc-600 dark:text-zinc-400">{article.autore}</span>
-                {article.partecipanti && Array.isArray(article.partecipanti) && article.partecipanti.length > 0 && (
-                  <>
-                    <span className="font-medium text-zinc-900 dark:text-zinc-50 mt-2">Partecipanti</span>
-                    <div className="flex flex-wrap gap-2">
-                      {article.partecipanti.map((partecipante, idx) => (
-                        <span 
-                          key={idx}
-                          className="text-zinc-600 dark:text-zinc-400"
-                        >
-                          {partecipante}
-                        </span>
-                      ))}
-                    </div>
-                  </>
+              <div className="flex flex-col gap-4">
+                <div>
+                  <span className="font-medium text-zinc-900 dark:text-zinc-50 block mb-1">Autore</span>
+                  <span className="text-zinc-600 dark:text-zinc-400">{article.autore}</span>
+                </div>
+                
+                {article.partecipanti && (
+                  <div>
+                    <span className="font-medium text-zinc-900 dark:text-zinc-50 block mb-1">Partecipanti</span>
+                    <span className="text-zinc-600 dark:text-zinc-400">
+                      {Array.isArray(article.partecipanti) 
+                        ? article.partecipanti.join(', ')
+                        : article.partecipanti}
+                    </span>
+                  </div>
                 )}
-                <span className="flex items-center text-zinc-600 dark:text-zinc-400 mt-2">
+                
+                <span className="flex items-center text-zinc-600 dark:text-zinc-400">
                   <FiClock className="mr-1 h-4 w-4" />
                   {getTimeAgo(article.creazione)}
                 </span>

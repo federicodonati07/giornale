@@ -45,6 +45,19 @@ export default function NewArticlePage() {
   const [partecipanti, setPartecipanti] = useState("")
   const tagDropdownRef = useRef<HTMLDivElement>(null)
   
+  // Aggiungi questi stati
+  const [activeFormats, setActiveFormats] = useState({
+    bold: false,
+    italic: false,
+    underline: false,
+    highlight: false
+  });
+
+  // Aggiungi questo stato per i link aggiuntivi
+  const [additionalLinks, setAdditionalLinks] = useState<Array<{ url: string, label: string }>>([]);
+  const [newLinkUrl, setNewLinkUrl] = useState('');
+  const [newLinkLabel, setNewLinkLabel] = useState('');
+
   // Verifica se l'utente è autorizzato
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -74,6 +87,31 @@ export default function NewArticlePage() {
       document.removeEventListener("mousedown", handleClickOutside)
     }
   }, [])
+
+  // Aggiungi questo useEffect per gestire le scorciatoie da tastiera
+  useEffect(() => {
+    const handleKeyboard = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        switch (e.key.toLowerCase()) {
+          case 'b':
+            e.preventDefault();
+            handleTextFormatting('bold');
+            break;
+          case 'i':
+            e.preventDefault();
+            handleTextFormatting('italic');
+            break;
+          case 'u':
+            e.preventDefault();
+            handleTextFormatting('underline');
+            break;
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyboard);
+    return () => document.removeEventListener('keydown', handleKeyboard);
+  }, []);
 
   // Funzione per mostrare notifiche
   const showNotification = (type: string, message: string) => {
@@ -188,12 +226,13 @@ export default function NewArticlePage() {
         immagine: imageUrl,
         tag: selectedTags.join(", "),
         partecipanti,
+        additionalLinks,
         uuid: articleUuid,
         creazione: new Date().toISOString(),
         upvote: 0,
         shared: 0,
         view: 0,
-        userId: currentUser.uid // Aggiungi l'ID dell'utente per le regole di sicurezza
+        userId: currentUser.uid
       }
 
       try {
@@ -247,9 +286,57 @@ export default function NewArticlePage() {
     }
   };
 
-  // Funzione per gestire l'input del contenuto
-  const handleContentInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setContenuto(e.target.value);
+  // Funzione per gestire la formattazione
+  const handleTextFormatting = (format: 'bold' | 'italic' | 'underline' | 'highlight') => {
+    const selection = window.getSelection();
+    if (!selection || !selection.rangeCount) return;
+    
+    document.execCommand('styleWithCSS', false, 'true');
+    
+    // Gestione di tutti i formati incluso highlight
+    const commands = {
+      bold: 'bold',
+      italic: 'italic',
+      underline: 'underline',
+      highlight: 'backColor'
+    };
+    
+    if (format === 'highlight') {
+      const currentColor = document.queryCommandValue('backColor');
+      const isHighlighted = currentColor === 'rgb(251, 146, 60)'; // amber-500
+      document.execCommand(commands[format], false, isHighlighted ? 'inherit' : '#fb923c');
+      setActiveFormats(prev => ({
+        ...prev,
+        highlight: !isHighlighted
+      }));
+    } else {
+      document.execCommand(commands[format], false);
+      setActiveFormats(prev => ({
+        ...prev,
+        [format]: document.queryCommandState(commands[format])
+      }));
+    }
+  };
+
+  // Modifica la funzione handleContentChange per preservare i link
+  const handleContentChange = () => {
+    const editorContent = document.getElementById('article-content');
+    if (editorContent) {
+      // Salva il contenuto HTML
+      setContenuto(editorContent.innerHTML);
+    }
+  };
+
+  // Aggiungi questa funzione per gestire l'aggiunta dei link
+  const handleAddLink = () => {
+    if (!newLinkUrl || !newLinkLabel) {
+      showNotification('error', 'Inserisci sia URL che etichetta per il link');
+      return;
+    }
+
+    setAdditionalLinks([...additionalLinks, { url: newLinkUrl, label: newLinkLabel }]);
+    setNewLinkUrl('');
+    setNewLinkLabel('');
   };
 
   if (loading) {
@@ -429,15 +516,98 @@ export default function NewArticlePage() {
             
             {/* Contenuto */}
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">Contenuto *</label>
-              <textarea
-                value={contenuto}
-                onChange={handleContentInput}
-                className="w-full p-4 bg-white/5 border border-white/20 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
-                placeholder="Inserisci il contenuto dell'articolo"
-                rows={10}
-                required
+              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+                Contenuto *
+              </label>
+              
+              {/* Barra degli strumenti */}
+              <div className="mb-2 flex gap-2 sticky top-0 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm p-2 rounded-lg z-10">
+                <button
+                  type="button"
+                  onClick={() => handleTextFormatting('bold')}
+                  className={`p-2 rounded-lg transition-colors cursor-pointer ${
+                    activeFormats.bold 
+                      ? 'bg-amber-500 text-white' 
+                      : 'bg-white/10 hover:bg-white/20 dark:bg-zinc-800/50 dark:hover:bg-zinc-800'
+                  }`}
+                  title="Grassetto (Ctrl+B)"
+                >
+                  <span className="font-bold">B</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleTextFormatting('italic')}
+                  className={`p-2 rounded-lg transition-colors cursor-pointer ${
+                    activeFormats.italic 
+                      ? 'bg-amber-500 text-white' 
+                      : 'bg-white/10 hover:bg-white/20 dark:bg-zinc-800/50 dark:hover:bg-zinc-800'
+                  }`}
+                  title="Corsivo (Ctrl+I)"
+                >
+                  <span className="italic">I</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleTextFormatting('underline')}
+                  className={`p-2 rounded-lg transition-colors cursor-pointer ${
+                    activeFormats.underline 
+                      ? 'bg-amber-500 text-white' 
+                      : 'bg-white/10 hover:bg-white/20 dark:bg-zinc-800/50 dark:hover:bg-zinc-800'
+                  }`}
+                  title="Sottolineato (Ctrl+U)"
+                >
+                  <span className="underline">U</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleTextFormatting('highlight')}
+                  className={`p-2 rounded-lg transition-colors cursor-pointer ${
+                    activeFormats.highlight 
+                      ? 'bg-amber-500 text-white' 
+                      : 'bg-white/10 hover:bg-white/20 dark:bg-zinc-800/50 dark:hover:bg-zinc-800'
+                  }`}
+                  title="Evidenzia"
+                >
+                  <span className={`px-1 ${
+                    activeFormats.highlight
+                      ? 'text-white'
+                      : 'bg-amber-400/30 text-amber-600 dark:text-amber-400'
+                  }`}>H</span>
+                </button>
+              </div>
+
+              {/* Editor WYSIWYG */}
+              <div
+                id="article-content"
+                contentEditable
+                onInput={handleContentChange}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    document.execCommand('insertParagraph', false);
+                  }
+                }}
+                className="min-h-[300px] w-full p-4 bg-white/5 border border-white/20 rounded-xl 
+                  focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 
+                  transition-all duration-300 text-zinc-900 dark:text-zinc-50 
+                  outline-none font-montserrat overflow-auto
+                  prose prose-zinc dark:prose-invert max-w-none
+                  [&>p]:mb-4 [&>p]:leading-relaxed [&>p]:tracking-wide
+                  [&_a]:text-amber-500 [&_a]:no-underline [&_a]:cursor-pointer
+                  [&_a:hover]:text-amber-600 
+                  dark:[&_a]:text-amber-500 
+                  dark:[&_a:hover]:text-amber-600
+                  [&_a]:transition-colors [&_a]:duration-200
+                  [&_a]:pointer-events-auto
+                  [&_[style*='background-color: rgb(251, 146, 60)']]:text-zinc-900
+                  [&_[style*='background-color: rgb(251, 146, 60)']]:bg-amber-500"
+                data-placeholder="Inizia a scrivere il tuo articolo..."
               />
+              
+              <p className="mt-2 text-xs text-zinc-500">
+                Usa i pulsanti sopra o le scorciatoie da tastiera per formattare il testo. 
+                Premi Enter per un nuovo paragrafo, Shift+Enter per una nuova riga.
+              </p>
             </div>
 
             {/* Caricamento immagine */}
@@ -530,6 +700,57 @@ export default function NewArticlePage() {
                         style={{ width: `${uploadProgress}%` }}
                       ></div>
                     </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Link aggiuntivi */}
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+                Link aggiuntivi
+              </label>
+              <div className="space-y-4">
+                {/* Form per aggiungere nuovi link */}
+                <div className="flex gap-4">
+                  <input
+                    type="text"
+                    value={newLinkLabel}
+                    onChange={(e) => setNewLinkLabel(e.target.value)}
+                    placeholder="Etichetta del link"
+                    className="flex-1 p-2 bg-white/5 border border-white/20 rounded-lg focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
+                  />
+                  <input
+                    type="url"
+                    value={newLinkUrl}
+                    onChange={(e) => setNewLinkUrl(e.target.value)}
+                    placeholder="URL"
+                    className="flex-1 p-2 bg-white/5 border border-white/20 rounded-lg focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
+                  />
+                  <button
+                    onClick={handleAddLink}
+                    className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
+                  >
+                    Aggiungi Link
+                  </button>
+                </div>
+
+                {/* Lista dei link aggiunti */}
+                {additionalLinks.length > 0 && (
+                  <div className="flex flex-wrap gap-2 p-4 bg-white/5 border border-white/20 rounded-lg">
+                    {additionalLinks.map((link, index) => (
+                      <div key={index} className="flex items-center gap-2 bg-amber-500/10 text-amber-600 dark:text-amber-400 px-3 py-1.5 rounded-full">
+                        <span>{link.label}</span>
+                        <button
+                          onClick={() => {
+                            setAdditionalLinks(additionalLinks.filter((_, i) => i !== index));
+                          }}
+                          className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300"
+                        >
+                          <FiX className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>

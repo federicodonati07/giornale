@@ -1,6 +1,6 @@
 // tailwind.config.js
 const {heroui} = require("@heroui/theme");
-const { defaultTheme } = require('tailwindcss');
+const { defaultTheme, fontFamily } = require('tailwindcss');
 
 /** @type {import('tailwindcss').Config} */
 module.exports = {
@@ -12,6 +12,7 @@ module.exports = {
       fontFamily: {
         sans: ['var(--font-inter)', ...defaultTheme.fontFamily.sans],
         serif: ['var(--font-merriweather)', ...defaultTheme.fontFamily.serif],
+        montserrat: ['var(--font-montserrat)', ...fontFamily.sans],
       },
     },
   },
