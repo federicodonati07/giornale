@@ -175,8 +175,8 @@ export function FeaturedNews() {
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-60 group-hover:opacity-70 transition-opacity" />
                   
                   {/* Tags con design moderno */}
-                  <div className="absolute top-3 right-3 flex flex-wrap gap-2 justify-end max-w-[80%]">
-                    {article.tag?.split(',').slice(0, 1).map((tag, idx) => (
+                  <div className="absolute top-3 right-3 flex flex-wrap gap-2 justify-end max-w-[90%]">
+                    {article.tag?.split(',').map((tag, idx) => (
                       <span 
                         key={idx} 
                         className="px-3 py-1 text-[10px] font-medium bg-amber-500/90 text-white rounded-full shadow-lg backdrop-blur-md transition-transform duration-300 group-hover:scale-105"
@@ -260,7 +260,7 @@ export function FeaturedNews() {
                   <div className="flex flex-col flex-1 min-w-0">
                     {/* Tag */}
                     <div className="flex flex-wrap gap-1 mb-2">
-                      {article.tag?.split(',').slice(0, 1).map((tag, idx) => (
+                      {article.tag?.split(',').map((tag, idx) => (
                         <span 
                           key={idx} 
                           className="px-2 py-0.5 text-[10px] font-medium bg-amber-500/90 text-white rounded-full"

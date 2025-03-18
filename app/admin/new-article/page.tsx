@@ -22,8 +22,27 @@ const availableCategories = [
   "AVIAZIONE",
   "SCIENZE",
   "MODA",
+  "NATURA",
   "ITALIA"
 ]
+
+// Aggiungi questo all'interfaccia ArticleData se esiste, altrimenti creala
+interface ArticleData {
+  titolo: string;
+  autore: string;
+  contenuto: string;
+  immagine: string;
+  tag: string;
+  partecipanti?: string;
+  additionalLinks?: Array<{ url: string, label: string }>;
+  uuid: string;
+  creazione: string;
+  upvote: number;
+  shared: number;
+  view: number;
+  userId: string;
+  isPrivate: boolean;
+}
 
 export default function NewArticlePage() {
   const router = useRouter()
@@ -57,6 +76,9 @@ export default function NewArticlePage() {
   const [additionalLinks, setAdditionalLinks] = useState<Array<{ url: string, label: string }>>([]);
   const [newLinkUrl, setNewLinkUrl] = useState('');
   const [newLinkLabel, setNewLinkLabel] = useState('');
+
+  // Aggiungi questo stato
+  const [isPrivate, setIsPrivate] = useState(false);
 
   // Verifica se l'utente è autorizzato
   useEffect(() => {
@@ -219,7 +241,7 @@ export default function NewArticlePage() {
       }
       
       // Crea l'oggetto articolo
-      const articleData = {
+      const articleData: ArticleData = {
         titolo,
         autore,
         contenuto,
@@ -232,7 +254,8 @@ export default function NewArticlePage() {
         upvote: 0,
         shared: 0,
         view: 0,
-        userId: currentUser.uid
+        userId: currentUser.uid,
+        isPrivate
       }
 
       try {
@@ -512,6 +535,36 @@ export default function NewArticlePage() {
                 />
               </div>
               <p className="mt-1 text-xs text-zinc-500">La data di creazione verrà impostata automaticamente</p>
+            </div>
+            
+            {/* Toggle per la visibilità dell'articolo */}
+            <div className="md:col-span-2 flex items-center justify-between p-4 bg-white/5 dark:bg-zinc-800/20 rounded-xl border border-white/10 dark:border-zinc-700/50">
+              <div className="flex flex-col">
+                <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
+                  Visibilità articolo
+                </span>
+                <span className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                  {isPrivate 
+                    ? "Solo gli utenti registrati potranno vedere questo articolo" 
+                    : "L'articolo sarà visibile a tutti"}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPrivate(!isPrivate)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 cursor-pointerfocus:outline-none
+                  ${isPrivate 
+                    ? 'bg-amber-500' 
+                    : 'bg-zinc-300 dark:bg-zinc-600'}`}
+              >
+                <span className="sr-only">
+                  Toggle article visibility
+                </span>
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300
+                    ${isPrivate ? 'translate-x-6' : 'translate-x-1'}`}
+                />
+              </button>
             </div>
             
             {/* Contenuto */}

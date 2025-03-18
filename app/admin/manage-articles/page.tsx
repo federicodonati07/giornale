@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
-import { FiArrowLeft, FiEdit2, FiTrash2, FiEye, FiHeart, FiShare2, FiAlertCircle, FiX, FiSave } from "react-icons/fi"
+import { FiArrowLeft, FiEdit2, FiTrash2, FiEye, FiHeart, FiShare2, FiAlertCircle, FiX, FiSave, FiUser, FiUsers } from "react-icons/fi"
 import { getStorage, ref as storageRef, deleteObject } from "firebase/storage"
 import { ref, get, remove, update } from "firebase/database"
 import { onAuthStateChanged } from "firebase/auth"
@@ -24,6 +24,8 @@ interface ArticleData {
   shared: number
   view: number
   partecipanti?: string
+  isPrivate: boolean
+  additionalLinks?: { label: string; url: string }[]
 }
 
 interface TagOption {
@@ -43,17 +45,19 @@ export default function ManageArticlesPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [editArticle, setEditArticle] = useState<ArticleData | null>(null)
   const [availableTags] = useState<TagOption[]>([
-    { value: 'SCUOLA', label: 'SCUOLA' },
-    { value: 'SPORT', label: 'SPORT' },
     { value: 'ATTUALITÀ', label: 'ATTUALITÀ' },
-    { value: 'TECNOLOGIA', label: 'TECNOLOGIA' },
-    { value: 'CULTURA', label: 'CULTURA' },
     { value: 'POLITICA', label: 'POLITICA' },
-    { value: 'AMBIENTE', label: 'AMBIENTE' },
-    { value: 'SALUTE', label: 'SALUTE' },
+    { value: 'ESTERO', label: 'ESTERO' },
     { value: 'ECONOMIA', label: 'ECONOMIA' },
-    { value: 'INTRATTENIMENTO', label: 'INTRATTENIMENTO' }
+    { value: 'TECNOLOGIA', label: 'TECNOLOGIA' },
+    { value: 'SPORT', label: 'SPORT' },
+    { value: 'AVIAZIONE', label: 'AVIAZIONE' },
+    { value: 'SCIENZE', label: 'SCIENZE' },
+    { value: 'MODA', label: 'MODA' },
+    { value: 'NATURA', label: 'NATURA' },
+    { value: 'ITALIA', label: 'ITALIA' }
   ])
+  const [newLink, setNewLink] = useState({ url: '', label: '' })
 
   // Verifica se l'utente è autorizzato
   useEffect(() => {
@@ -157,7 +161,9 @@ export default function ManageArticlesPage() {
         titolo: editArticle.titolo,
         contenuto: editArticle.contenuto,
         tag: editArticle.tag,
-        partecipanti: editArticle.partecipanti || ""
+        partecipanti: editArticle.partecipanti || "",
+        isPrivate: editArticle.isPrivate,
+        additionalLinks: editArticle.additionalLinks || []
       };
       
       await update(articleRef, updates);
@@ -257,6 +263,29 @@ export default function ManageArticlesPage() {
     return content.substring(0, maxLength).trim() + '...'
   }
 
+  // Funzione per aggiungere un nuovo link
+  const handleAddLink = () => {
+    if (!editArticle) return
+    
+    if (!newLink.url || !newLink.label) {
+      showNotification('error', 'Inserisci sia URL che etichetta per il link')
+      return
+    }
+
+    if (!newLink.url.startsWith('http://') && !newLink.url.startsWith('https://')) {
+      showNotification('error', "L'URL deve iniziare con http:// o https://")
+      return
+    }
+
+    setEditArticle({
+      ...editArticle,
+      additionalLinks: [...(editArticle.additionalLinks || []), newLink]
+    })
+    
+    // Reset form
+    setNewLink({ url: '', label: '' })
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-zinc-100 to-zinc-200/90 dark:from-zinc-900 dark:to-zinc-800">
@@ -291,7 +320,7 @@ export default function ManageArticlesPage() {
       {/* Popup di modifica */}
       {editArticle && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-zinc-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-zinc-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-serif font-bold text-zinc-900 dark:text-zinc-50">
@@ -299,27 +328,66 @@ export default function ManageArticlesPage() {
                 </h2>
                 <button 
                   onClick={() => setEditArticle(null)}
-                  className="p-2 rounded-full bg-zinc-100 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-colors duration-200 cursor-pointer"
+                  className="p-2 rounded-full bg-zinc-100 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-colors duration-200"
                 >
                   <FiX className="h-5 w-5" />
                 </button>
               </div>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Titolo */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
                     Titolo
                   </label>
                   <input
                     type="text"
                     value={editArticle.titolo}
                     onChange={(e) => setEditArticle({...editArticle, titolo: e.target.value})}
-                    className="w-full p-3 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
+                    className="w-full p-4 bg-white/5 border border-white/20 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
                   />
                 </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+
+                {/* Autore */}
+                <div className="relative">
+                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+                    Autore
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-zinc-500">
+                      <FiUser className="h-5 w-5" />
+                    </div>
+                    <input
+                      type="text"
+                      value={editArticle.autore}
+                      onChange={(e) => setEditArticle({...editArticle, autore: e.target.value})}
+                      className="w-full pl-10 p-4 bg-white/5 border border-white/20 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Partecipanti */}
+                <div className="relative">
+                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+                    Partecipanti
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-zinc-500">
+                      <FiUsers className="h-5 w-5" />
+                    </div>
+                    <input
+                      type="text"
+                      value={editArticle.partecipanti || ""}
+                      onChange={(e) => setEditArticle({...editArticle, partecipanti: e.target.value})}
+                      className="w-full pl-10 p-4 bg-white/5 border border-white/20 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
+                      placeholder="Altri partecipanti all'articolo"
+                    />
+                  </div>
+                </div>
+
+                {/* Tag */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
                     Tag
                   </label>
                   <Select
@@ -328,9 +396,11 @@ export default function ManageArticlesPage() {
                     options={availableTags}
                     className="react-select-container"
                     classNamePrefix="react-select"
-                    value={editArticle.tag.split(',').map(tag => ({ value: tag.trim().toUpperCase(), label: tag.trim().toUpperCase() }))}
+                    value={editArticle.tag.split(',').map(tag => ({ 
+                      value: tag.trim().toUpperCase(), 
+                      label: tag.trim().toUpperCase() 
+                    }))}
                     onChange={handleTagChange}
-                    placeholder="Seleziona i tag..."
                     styles={{
                       control: (baseStyles) => ({
                         ...baseStyles,
@@ -348,8 +418,7 @@ export default function ManageArticlesPage() {
                         backgroundColor: 'rgba(30, 41, 59, 0.95)',
                         backdropFilter: 'blur(10px)',
                         borderRadius: '0.75rem',
-                        overflow: 'hidden',
-                        zIndex: 9999
+                        overflow: 'hidden'
                       }),
                       option: (baseStyles, state) => ({
                         ...baseStyles,
@@ -362,73 +431,128 @@ export default function ManageArticlesPage() {
                         '&:hover': {
                           backgroundColor: 'rgba(59, 130, 246, 0.3)'
                         }
-                      }),
-                      multiValue: (baseStyles) => ({
-                        ...baseStyles,
-                        backgroundColor: 'rgba(59, 130, 246, 0.2)',
-                        borderRadius: '0.5rem'
-                      }),
-                      multiValueLabel: (baseStyles) => ({
-                        ...baseStyles,
-                        color: 'rgba(59, 130, 246, 1)'
-                      }),
-                      multiValueRemove: (baseStyles) => ({
-                        ...baseStyles,
-                        color: 'rgba(59, 130, 246, 0.8)',
-                        '&:hover': {
-                          backgroundColor: 'rgba(59, 130, 246, 0.4)',
-                          color: 'white'
-                        }
-                      }),
-                      input: (baseStyles) => ({
-                        ...baseStyles,
-                        color: 'white'
-                      }),
-                      placeholder: (baseStyles) => ({
-                        ...baseStyles,
-                        color: 'rgba(203, 213, 225, 0.8)'
-                      }),
-                      singleValue: (baseStyles) => ({
-                        ...baseStyles,
-                        color: 'inherit'
                       })
                     }}
                   />
                 </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                    Partecipanti (opzionale)
-                  </label>
-                  <input
-                    type="text"
-                    value={editArticle.partecipanti || ""}
-                    onChange={(e) => setEditArticle({...editArticle, partecipanti: e.target.value})}
-                    className="w-full p-3 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
-                  />
+
+                {/* Toggle Visibilità */}
+                <div className="md:col-span-2">
+                  <div className="flex items-center justify-between p-4 bg-white/5 dark:bg-zinc-800/20 rounded-xl border border-white/10 dark:border-zinc-700/50">
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
+                        Visibilità articolo
+                      </span>
+                      <span className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                        {editArticle.isPrivate 
+                          ? "Solo gli utenti registrati potranno vedere questo articolo" 
+                          : "L'articolo è visibile a tutti"}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setEditArticle({
+                        ...editArticle,
+                        isPrivate: !editArticle.isPrivate
+                      })}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300
+                        ${editArticle.isPrivate 
+                          ? 'bg-amber-500' 
+                          : 'bg-zinc-300 dark:bg-zinc-600'}`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300
+                          ${editArticle.isPrivate ? 'translate-x-6' : 'translate-x-1'}`}
+                      />
+                    </button>
+                  </div>
                 </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+
+                {/* Editor del contenuto */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
                     Contenuto
                   </label>
                   <textarea
                     value={editArticle.contenuto}
                     onChange={(e) => setEditArticle({...editArticle, contenuto: e.target.value})}
-                    rows={10}
-                    className="w-full p-3 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
+                    rows={15}
+                    className="w-full p-4 bg-white/5 border border-white/20 rounded-xl 
+                      focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 
+                      transition-all duration-300 text-zinc-900 dark:text-zinc-50 
+                      outline-none font-montserrat resize-y"
                   />
                 </div>
-                
-                <div className="flex justify-end pt-4">
-                  <button
-                    onClick={updateArticle}
-                    className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors duration-200 cursor-pointer"
-                  >
-                    <FiSave className="mr-2 h-4 w-4" />
-                    Salva modifiche
-                  </button>
+
+                {/* Link aggiuntivi */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+                    Link aggiuntivi
+                  </label>
+                  
+                  {/* Form per aggiungere link */}
+                  <div className="flex gap-3 mb-4">
+                    <input
+                      type="text"
+                      placeholder="URL del link"
+                      value={newLink.url}
+                      onChange={(e) => setNewLink({ ...newLink, url: e.target.value })}
+                      className="flex-1 p-3 bg-white/5 border border-white/20 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Etichetta del link"
+                      value={newLink.label}
+                      onChange={(e) => setNewLink({ ...newLink, label: e.target.value })}
+                      className="flex-1 p-3 bg-white/5 border border-white/20 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
+                    />
+                    <button
+                      onClick={handleAddLink}
+                      className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl transition-colors duration-200"
+                    >
+                      Aggiungi
+                    </button>
+                  </div>
+
+                  {/* Lista dei link */}
+                  <div className="space-y-4">
+                    {editArticle.additionalLinks?.map((link, index) => (
+                      <div key={index} className="flex items-center justify-between gap-2 bg-amber-500/10 text-amber-600 dark:text-amber-400 px-4 py-2 rounded-xl">
+                        <div className="flex flex-col">
+                          <span className="font-medium">{link.label}</span>
+                          <span className="text-sm opacity-75">{link.url}</span>
+                        </div>
+                        <button
+                          onClick={() => {
+                            const newLinks = [...(editArticle.additionalLinks || [])];
+                            newLinks.splice(index, 1);
+                            setEditArticle({...editArticle, additionalLinks: newLinks});
+                          }}
+                          className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300"
+                        >
+                          <FiX className="h-5 w-5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
+              </div>
+
+              {/* Pulsanti azioni */}
+              <div className="flex justify-end gap-3 mt-6">
+                <button
+                  onClick={() => setEditArticle(null)}
+                  className="px-4 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-700 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-colors duration-200"
+                >
+                  Annulla
+                </button>
+                <button
+                  onClick={updateArticle}
+                  className="px-4 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-colors duration-200 flex items-center gap-2"
+                >
+                  <FiSave className="h-4 w-4" />
+                  Salva modifiche
+                </button>
               </div>
             </div>
           </div>

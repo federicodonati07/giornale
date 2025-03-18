@@ -30,6 +30,7 @@ const topics = [
   "AVIAZIONE",
   "SCIENZE",
   "MODA",
+  "NATURA",
   "ITALIA"
 ]
 
@@ -38,6 +39,11 @@ export default function Articles() {
   const [loading, setLoading] = useState(true)
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [filteredArticles, setFilteredArticles] = useState<ArticleData[]>([])
+  
+  // Aggiungi questi nuovi stati
+  const [showAllArticles, setShowAllArticles] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [sortBy, setSortBy] = useState<'date' | 'upvote' | 'view' | 'shared'>('date')
 
   useEffect(() => {
     const fetchArticles = async () => {
@@ -126,18 +132,60 @@ export default function Articles() {
     )
   }
 
-  // Filtra gli articoli quando cambiano i tag selezionati
+  // Funzione per filtrare gli articoli in base alla ricerca
+  const filterBySearch = (articles: ArticleData[]) => {
+    if (!searchQuery) return articles;
+    
+    const query = searchQuery.toLowerCase();
+    return articles.filter(article => 
+      article.titolo.toLowerCase().includes(query) ||
+      article.contenuto.toLowerCase().includes(query) ||
+      article.autore.toLowerCase().includes(query)
+    );
+  };
+
+  // Funzione per ordinare gli articoli
+  const sortArticles = (articles: ArticleData[]) => {
+    return [...articles].sort((a, b) => {
+      switch (sortBy) {
+        case 'upvote':
+          return (b.upvote || 0) - (a.upvote || 0);
+        case 'view':
+          return (b.view || 0) - (a.view || 0);
+        case 'shared':
+          return (b.shared || 0) - (a.shared || 0);
+        default:
+          return new Date(b.creazione).getTime() - new Date(a.creazione).getTime();
+      }
+    });
+  };
+
+  // Modifica l'useEffect esistente per il filtraggio
   useEffect(() => {
-    if (selectedTags.length === 0) {
-      setFilteredArticles(articles)
-    } else {
-      setFilteredArticles(articles.filter(article => 
+    let result = articles;
+    
+    // Applica i filtri per tag
+    if (selectedTags.length > 0) {
+      result = result.filter(article => 
         article.tag?.split(',').some(tag => 
           selectedTags.includes(tag.trim().toUpperCase())
         )
-      ))
+      );
     }
-  }, [selectedTags, articles])
+    
+    // Applica il filtro di ricerca
+    result = filterBySearch(result);
+    
+    // Ordina gli articoli
+    result = sortArticles(result);
+    
+    setFilteredArticles(result);
+  }, [selectedTags, articles, searchQuery, sortBy]);
+
+  // Calcola gli articoli da visualizzare
+  const displayedArticles = showAllArticles 
+    ? filteredArticles 
+    : filteredArticles.slice(0, 15);
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-zinc-100 to-zinc-200/90 dark:from-zinc-900 dark:to-zinc-800">
@@ -157,21 +205,108 @@ export default function Articles() {
           <div className="w-16 h-[1px] bg-zinc-800 dark:bg-zinc-200" />
         </div>
 
+        {/* Aggiungi la barra di ricerca e i filtri di ordinamento */}
+        <div className="mb-8 space-y-4">
+          {/* Barra di ricerca */}
+          <div className="relative max-w-xl mx-auto">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Cerca per titolo, contenuto o autore..."
+              className="w-full p-4 pl-12 bg-white/10 dark:bg-zinc-800/30 border border-white/20 rounded-xl focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
+            />
+            <svg
+              className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-zinc-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+
+          {/* Filtri di ordinamento */}
+          <div className="flex flex-wrap justify-center gap-3 px-4">
+            <button
+              onClick={() => setSortBy('date')}
+              className={`
+                flex items-center gap-2 px-5 py-2.5 rounded-xl
+                font-medium text-sm transition-all duration-300 cursor-pointer
+                transform hover:scale-105 active:scale-100
+                ${sortBy === 'date'
+                  ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-lg shadow-amber-500/25'
+                  : 'bg-white/10 dark:bg-zinc-800/30 text-zinc-700 dark:text-zinc-300 hover:bg-white/20 dark:hover:bg-zinc-800/50'
+                }
+              `}
+            >
+              <FiClock className={`h-4 w-4 ${sortBy === 'date' ? 'animate-pulse' : ''}`} />
+              Più recenti
+            </button>
+            <button
+              onClick={() => setSortBy('upvote')}
+              className={`
+                flex items-center gap-2 px-5 py-2.5 rounded-xl
+                font-medium text-sm transition-all duration-300 cursor-pointer
+                transform hover:scale-105 active:scale-100
+                ${sortBy === 'upvote'
+                  ? 'bg-gradient-to-r from-rose-500 to-rose-600 text-white shadow-lg shadow-rose-500/25'
+                  : 'bg-white/10 dark:bg-zinc-800/30 text-zinc-700 dark:text-zinc-300 hover:bg-white/20 dark:hover:bg-zinc-800/50'
+                }
+              `}
+            >
+              <FiHeart className={`h-4 w-4 ${sortBy === 'upvote' ? 'animate-pulse' : ''}`} />
+              Più piaciuti
+            </button>
+            <button
+              onClick={() => setSortBy('view')}
+              className={`
+                flex items-center gap-2 px-5 py-2.5 rounded-xl
+                font-medium text-sm transition-all duration-300 cursor-pointer
+                transform hover:scale-105 active:scale-100
+                ${sortBy === 'view'
+                  ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/25'
+                  : 'bg-white/10 dark:bg-zinc-800/30 text-zinc-700 dark:text-zinc-300 hover:bg-white/20 dark:hover:bg-zinc-800/50'
+                }
+              `}
+            >
+              <FiEye className={`h-4 w-4 ${sortBy === 'view' ? 'animate-pulse' : ''}`} />
+              Più visti
+            </button>
+            <button
+              onClick={() => setSortBy('shared')}
+              className={`
+                flex items-center gap-2 px-5 py-2.5 rounded-xl
+                font-medium text-sm transition-all duration-300 cursor-pointer
+                transform hover:scale-105 active:scale-100
+                ${sortBy === 'shared'
+                  ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/25'
+                  : 'bg-white/10 dark:bg-zinc-800/30 text-zinc-700 dark:text-zinc-300 hover:bg-white/20 dark:hover:bg-zinc-800/50'
+                }
+              `}
+            >
+              <FiShare2 className={`h-4 w-4 ${sortBy === 'shared' ? 'animate-pulse' : ''}`} />
+              Più condivisi
+            </button>
+          </div>
+        </div>
+
         {/* Topics Navigation */}
         <div className="mb-8">
-          <div className="flex flex-wrap justify-center gap-2 sm:gap-3 max-w-7xl mx-auto">
+          <div className="flex flex-wrap justify-center gap-3 max-w-7xl mx-auto">
             {topics.map((topic) => (
               <button
                 key={topic}
                 onClick={() => toggleTag(topic)}
                 className={`
-                  px-4 py-2 text-xs sm:text-sm font-medium tracking-wider rounded-full
-                  transition-all duration-300 ease-in-out cursor-pointer
+                  flex items-center px-5 py-2.5 text-xs sm:text-sm font-medium
+                  rounded-xl transition-all duration-300 cursor-pointer
+                  transform hover:scale-105 active:scale-100
                   ${selectedTags.includes(topic)
-                    ? 'bg-amber-500 text-white shadow-lg scale-105'
-                    : 'bg-white/10 dark:bg-zinc-800/50 text-zinc-800 dark:text-zinc-200 hover:bg-amber-500/10 hover:text-amber-500 dark:hover:bg-amber-500/20'
+                    ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-lg shadow-amber-500/25'
+                    : 'bg-white/10 dark:bg-zinc-800/30 text-zinc-700 dark:text-zinc-300 hover:bg-white/20 dark:hover:bg-zinc-800/50'
                   }
-                  border border-white/20 backdrop-blur-md
+                  backdrop-blur-md border border-white/10
                 `}
               >
                 {topic}
@@ -181,7 +316,10 @@ export default function Articles() {
           {selectedTags.length > 0 && (
             <button
               onClick={() => setSelectedTags([])}
-              className="mt-4 mx-auto block text-sm text-zinc-500 dark:text-zinc-400 hover:text-amber-500 dark:hover:text-amber-400 transition-colors duration-300"
+              className="mt-6 mx-auto block text-sm font-medium px-4 py-2 rounded-lg
+                text-zinc-500 dark:text-zinc-400 hover:text-amber-500 dark:hover:text-amber-400 
+                transition-all duration-300 hover:scale-105 active:scale-100
+                bg-white/5 dark:bg-zinc-800/30 hover:bg-white/10 dark:hover:bg-zinc-800/50"
             >
               Rimuovi filtri
             </button>
@@ -201,88 +339,90 @@ export default function Articles() {
           </div>
         ) : (
           <div className="grid gap-6 md:gap-8">
-            {filteredArticles.length > 0 ? (
-              filteredArticles.map((article) => (
-                <Link 
-                  href={`/article/${article.uuid}`}
-                  key={article.uuid}
-                  className="block group bg-white/5 dark:bg-zinc-800/20 hover:bg-white/10 dark:hover:bg-zinc-800/30 backdrop-blur-lg border border-white/10 dark:border-white/5 rounded-2xl overflow-hidden transition-all duration-300"
-                >
-                  <div className="flex flex-col sm:flex-row">
-                    {/* Immagine (visibile solo su desktop) */}
-                    <div className="relative sm:w-[240px] h-[200px] sm:h-auto flex-shrink-0">
-                      <Image
-                        src={article.immagine}
-                        alt={article.titolo}
-                        fill
-                        className="object-cover"
-                        onError={(e) => {
-                          const target = e.target as HTMLImageElement
-                          target.src = '/placeholder-image.jpg'
-                        }}
-                      />
+            {displayedArticles.map((article) => (
+              <Link 
+                href={`/article/${article.uuid}`}
+                key={article.uuid}
+                className="block group bg-white/5 dark:bg-zinc-800/20 hover:bg-white/10 dark:hover:bg-zinc-800/30 backdrop-blur-lg border border-white/10 dark:border-white/5 rounded-2xl overflow-hidden transition-all duration-300"
+              >
+                <div className="flex flex-col sm:flex-row">
+                  {/* Immagine (visibile solo su desktop) */}
+                  <div className="relative sm:w-[240px] h-[200px] sm:h-auto flex-shrink-0">
+                    <Image
+                      src={article.immagine}
+                      alt={article.titolo}
+                      fill
+                      className="object-cover"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement
+                        target.src = '/placeholder-image.jpg'
+                      }}
+                    />
+                  </div>
+
+                  {/* Contenuto */}
+                  <div className="flex flex-col flex-1 p-4 sm:p-6">
+                    {/* Tags */}
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      {article.tag?.split(',').map((tag, idx) => (
+                        <span 
+                          key={idx}
+                          className="px-2.5 py-1 text-[10px] font-medium bg-amber-500/90 text-white rounded-full"
+                        >
+                          {tag.trim() || 'GENERALE'}
+                        </span>
+                      ))}
                     </div>
 
-                    {/* Contenuto */}
-                    <div className="flex flex-col flex-1 p-4 sm:p-6">
-                      {/* Tags */}
-                      <div className="flex flex-wrap gap-2 mb-3">
-                        {article.tag?.split(',').map((tag, idx) => (
-                          <span 
-                            key={idx}
-                            className="px-2.5 py-1 text-[10px] font-medium bg-amber-500/90 text-white rounded-full"
-                          >
-                            {tag.trim() || 'GENERALE'}
-                          </span>
-                        ))}
+                    {/* Titolo */}
+                    <h2 className="font-serif text-xl sm:text-2xl font-bold text-zinc-900 dark:text-zinc-50 mb-2 group-hover:text-amber-500 transition-colors duration-300">
+                      {article.titolo}
+                    </h2>
+
+                    {/* Excerpt con font ottimizzato per la lettura */}
+                    <p className="font-['Inter'] text-sm leading-relaxed text-zinc-600 dark:text-zinc-400 mb-4 line-clamp-2 sm:line-clamp-3">
+                      {getExcerpt(article.contenuto)}
+                    </p>
+
+                    {/* Footer */}
+                    <div className="mt-auto flex flex-wrap items-center justify-between gap-4">
+                      <div className="flex items-center gap-4 text-sm text-zinc-500 dark:text-zinc-400">
+                        <span className="font-medium">{article.autore}</span>
+                        <span className="flex items-center">
+                          <FiClock className="mr-1 h-4 w-4" />
+                          {getTimeAgo(article.creazione)}
+                        </span>
                       </div>
 
-                      {/* Titolo */}
-                      <h2 className="font-serif text-xl sm:text-2xl font-bold text-zinc-900 dark:text-zinc-50 mb-2 group-hover:text-amber-500 transition-colors duration-300">
-                        {article.titolo}
-                      </h2>
-
-                      {/* Excerpt con font ottimizzato per la lettura */}
-                      <p className="font-['Inter'] text-sm leading-relaxed text-zinc-600 dark:text-zinc-400 mb-4 line-clamp-2 sm:line-clamp-3">
-                        {getExcerpt(article.contenuto)}
-                      </p>
-
-                      {/* Footer */}
-                      <div className="mt-auto flex flex-wrap items-center justify-between gap-4">
-                        <div className="flex items-center gap-4 text-sm text-zinc-500 dark:text-zinc-400">
-                          <span className="font-medium">{article.autore}</span>
-                          <span className="flex items-center">
-                            <FiClock className="mr-1 h-4 w-4" />
-                            {getTimeAgo(article.creazione)}
-                          </span>
-                        </div>
-
-                        {/* Metriche */}
-                        <div className="flex items-center gap-4 text-sm">
-                          <span className="flex items-center text-rose-500">
-                            <FiHeart className="mr-1 h-4 w-4" />
-                            {article.upvote || 0}
-                          </span>
-                          <span className="flex items-center text-emerald-500">
-                            <FiEye className="mr-1 h-4 w-4" />
-                            {article.view || 0}
-                          </span>
-                          <span className="flex items-center text-blue-500">
-                            <FiShare2 className="mr-1 h-4 w-4" />
-                            {article.shared || 0}
-                          </span>
-                        </div>
+                      {/* Metriche */}
+                      <div className="flex items-center gap-4 text-sm">
+                        <span className="flex items-center text-rose-500">
+                          <FiHeart className="mr-1 h-4 w-4" />
+                          {article.upvote || 0}
+                        </span>
+                        <span className="flex items-center text-emerald-500">
+                          <FiEye className="mr-1 h-4 w-4" />
+                          {article.view || 0}
+                        </span>
+                        <span className="flex items-center text-blue-500">
+                          <FiShare2 className="mr-1 h-4 w-4" />
+                          {article.shared || 0}
+                        </span>
                       </div>
                     </div>
                   </div>
-                </Link>
-              ))
-            ) : (
-              <div className="text-center py-12">
-                <p className="text-zinc-600 dark:text-zinc-400">
-                  Nessun articolo trovato per i tag selezionati.
-                </p>
-              </div>
+                </div>
+              </Link>
+            ))}
+            
+            {/* Pulsante "Mostra più articoli" */}
+            {filteredArticles.length > 15 && (
+              <button
+                onClick={() => setShowAllArticles(!showAllArticles)}
+                className="mx-auto mt-8 px-6 py-3 bg-white/10 dark:bg-zinc-800/30 hover:bg-amber-500/10 rounded-xl transition-all duration-300 text-zinc-800 dark:text-zinc-200"
+              >
+                {showAllArticles ? 'Mostra meno articoli' : `Mostra altri ${filteredArticles.length - 15} articoli`}
+              </button>
             )}
           </div>
         )}
