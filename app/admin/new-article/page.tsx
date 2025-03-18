@@ -203,19 +203,10 @@ export default function NewArticlePage() {
         
         showNotification("success", "Articolo creato con successo!")
         
-        // Resetta i campi dopo il salvataggio
+        // Attendi un breve momento prima di reindirizzare per permettere all'utente di vedere la notifica
         setTimeout(() => {
-          setTitolo("")
-          setContenuto("")
-          setSelectedFile(null)
-          setImagePreview(null)
-          setSelectedTags([])
-          setPartecipanti("")
-          setUploadProgress(0)
-          setSaving(false)
-          if (fileInputRef.current) {
-            fileInputRef.current.value = ""
-          }
+          // Reindirizza alla pagina di gestione articoli
+          router.push("/admin/manage-articles")
         }, 1500)
       } catch (dbError) {
         console.error("Errore durante il salvataggio nel database:", dbError)
@@ -249,12 +240,24 @@ export default function NewArticlePage() {
     }
   }
 
+  // Funzione per inserire un'immagine nell'editor
+  const insertImageInEditor = () => {
+    if (imagePreview) {
+      document.execCommand('insertImage', false, imagePreview);
+    }
+  };
+
+  // Funzione per gestire l'input del contenuto
+  const handleContentInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setContenuto(e.target.value);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-zinc-100 to-zinc-200/90 dark:from-zinc-900 dark:to-zinc-800">
         <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
       </div>
-    )
+    );
   }
 
   if (!isAdmin) {
@@ -323,66 +326,6 @@ export default function NewArticlePage() {
                   required
                 />
               </div>
-            </div>
-            
-            {/* Caricamento immagine */}
-            <div className="relative">
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">Immagine *</label>
-              <div className="relative">
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  accept="image/*"
-                  onChange={handleFileChange}
-                  className="hidden"
-                  required
-                />
-                <div className="flex items-center gap-3">
-                  <div 
-                    onClick={() => fileInputRef.current?.click()}
-                    className="flex-grow p-4 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none cursor-pointer flex items-center"
-                  >
-                    <div className="mr-3 flex-shrink-0 h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
-                      <FiUpload className="h-5 w-5 text-blue-600 dark:text-blue-300" />
-                    </div>
-                    <div className="flex-1 truncate">
-                      {selectedFile ? (
-                        <span className="font-medium">{selectedFile.name}</span>
-                      ) : (
-                        <span className="text-zinc-500">Clicca per caricare un&apos;immagine</span>
-                      )}
-                    </div>
-                  </div>
-                  
-                  {/* Piccola anteprima */}
-                  {imagePreview && (
-                    <div className="relative h-14 w-14 rounded-md overflow-hidden border border-zinc-200 dark:border-zinc-700 shadow-sm">
-                      <img 
-                        src={imagePreview} 
-                        alt="Anteprima" 
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  )}
-                </div>
-                
-                {/* Barra di progresso durante il caricamento */}
-                {saving && uploadProgress > 0 && (
-                  <div className="mt-2">
-                    <div className="flex justify-between text-xs text-zinc-500 mb-1">
-                      <span>Caricamento in corso...</span>
-                      <span>{uploadProgress}%</span>
-                    </div>
-                    <div className="w-full bg-zinc-200 dark:bg-zinc-700 rounded-full h-2 overflow-hidden">
-                      <div 
-                        className="bg-blue-500 h-full transition-all duration-300 ease-out"
-                        style={{ width: `${uploadProgress}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                )}
-              </div>
-              <p className="mt-1 text-xs text-zinc-500">Formati supportati: JPG, PNG, GIF. Max 5MB.</p>
             </div>
             
             {/* Tag - Selezione multipla */}
@@ -489,12 +432,107 @@ export default function NewArticlePage() {
               <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">Contenuto *</label>
               <textarea
                 value={contenuto}
-                onChange={(e) => setContenuto(e.target.value)}
-                rows={12}
+                onChange={handleContentInput}
                 className="w-full p-4 bg-white/5 border border-white/20 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
-                placeholder="Scrivi il contenuto dell'articolo..."
+                placeholder="Inserisci il contenuto dell'articolo"
+                rows={10}
                 required
-              ></textarea>
+              />
+            </div>
+
+            {/* Caricamento immagine */}
+            <div className="md:col-span-2 relative">
+              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">Immagine *</label>
+              <div className="relative">
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  className="hidden"
+                  required
+                />
+                
+                <div className="flex flex-col sm:flex-row gap-4">
+                  {/* Area caricamento */}
+                  <div 
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex-grow p-6 bg-white/5 dark:bg-zinc-800/20 border-2 border-dashed border-zinc-300 dark:border-zinc-700 rounded-xl hover:border-blue-500 dark:hover:border-blue-400 transition-all duration-300 cursor-pointer flex items-center justify-center"
+                  >
+                    <div className="text-center">
+                      <div className="mx-auto h-12 w-12 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center mb-3">
+                        <FiUpload className="h-6 w-6 text-blue-600 dark:text-blue-300" />
+                      </div>
+                      
+                      <div className="flex-1">
+                        {selectedFile ? (
+                          <span className="font-medium text-zinc-800 dark:text-zinc-200">{selectedFile.name}</span>
+                        ) : (
+                          <>
+                            <p className="text-zinc-800 dark:text-zinc-300 font-medium">Clicca per caricare</p>
+                            <p className="text-xs text-zinc-500 mt-1">SVG, PNG, JPG o GIF (max. 5MB)</p>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Anteprima immagine */}
+                  {imagePreview && (
+                    <div className="relative w-full sm:w-1/3 h-48 rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-700 shadow-md">
+                      <img 
+                        src={imagePreview} 
+                        alt="Anteprima" 
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute top-2 right-2 flex gap-2">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            insertImageInEditor();
+                          }}
+                          className="bg-blue-500 text-white rounded-full p-1 shadow-lg hover:bg-blue-600 transition-colors"
+                          title="Inserisci nell'editor"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedFile(null);
+                            setImagePreview(null);
+                            if (fileInputRef.current) {
+                              fileInputRef.current.value = "";
+                            }
+                          }}
+                          className="bg-red-500 text-white rounded-full p-1 shadow-lg hover:bg-red-600 transition-colors"
+                          title="Rimuovi immagine"
+                        >
+                          <FiX className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Barra di progresso durante il caricamento */}
+                {saving && uploadProgress > 0 && (
+                  <div className="mt-4">
+                    <div className="flex justify-between text-xs text-zinc-500 mb-1">
+                      <span>Caricamento in corso...</span>
+                      <span>{uploadProgress}%</span>
+                    </div>
+                    <div className="w-full bg-zinc-200 dark:bg-zinc-700 rounded-full h-2 overflow-hidden">
+                      <div 
+                        className="bg-blue-500 h-full transition-all duration-300 ease-out"
+                        style={{ width: `${uploadProgress}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
           

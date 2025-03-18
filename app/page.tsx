@@ -135,7 +135,7 @@ export default function Home() {
         <div className="flex flex-col items-center justify-center space-y-8 sm:space-y-12 text-center">
           {/* Title with elegant serif font */}
           <h1 className="font-serif text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-            GIORNALE
+            PAXMAN
           </h1>
           
           {/* Decorative line */}
