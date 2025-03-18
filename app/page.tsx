@@ -8,11 +8,15 @@ import Link from "next/link"
 import { onAuthStateChanged, signOut, User } from "firebase/auth"
 import { auth } from "./firebase"
 
+
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
+
+  const [displayCount, setDisplayCount] = useState(0);
+  const animationRef = useRef<number | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -56,6 +60,49 @@ export default function Home() {
     };
   }, []);
 
+  // Funzione per animare il conteggio
+  const animateCount = (start: number, end: number, duration: number) => {
+    const startTime = performance.now();
+    
+    const updateCount = (currentTime: number) => {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      
+      // Easing function per un'animazione più fluida
+      const easeOutQuart = 1 - Math.pow(1 - progress, 4);
+      const currentCount = Math.floor(start + (end - start) * easeOutQuart);
+      
+      setDisplayCount(currentCount);
+      
+      if (progress < 1) {
+        animationRef.current = requestAnimationFrame(updateCount);
+      }
+    };
+    
+    animationRef.current = requestAnimationFrame(updateCount);
+  };
+
+  // Ottieni il conteggio degli utenti
+  useEffect(() => {
+    const fetchUserCount = async () => {
+      try {
+        // Ottieni la lista degli utenti da Authentication
+        const usersCount = 5; // Per ora impostiamo manualmente il numero di utenti che sappiamo esserci
+        animateCount(0, usersCount, 2000);
+      } catch (error) {
+        console.error("Errore nel recupero del conteggio utenti:", error);
+      }
+    };
+
+    fetchUserCount();
+
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    };
+  }, []);
+
   return (
     <main className="min-h-screen bg-gradient-to-br from-zinc-100 to-zinc-200/90 dark:from-zinc-900 dark:to-zinc-800">
       {/* Stili per l'animazione del menu */}
@@ -89,6 +136,14 @@ export default function Home() {
             {/* Menu a tendina */}
             {showUserMenu && (
               <div className="absolute right-0 top-12 w-48 py-2 bg-white/80 dark:bg-zinc-800/90 backdrop-blur-xl rounded-xl shadow-xl border border-white/30 dark:border-white/10 z-50 transform origin-top-right transition-all duration-300 animate-fade-in">
+                <div className="px-2">
+                  <Link href="/favorites">
+                    <div className="flex items-center px-3 py-2 text-sm text-zinc-800 dark:text-zinc-200 hover:bg-amber-500/10 hover:text-amber-500 rounded-lg transition-all duration-300 cursor-pointer">
+                      <FiHeart className="mr-2 h-4 w-4" />
+                      Articoli Preferiti
+                    </div>
+                  </Link>
+                </div>
                 {isAdmin && (
                   <div className="px-2">
                     <Link href="/admin/new-article">
@@ -133,10 +188,22 @@ export default function Home() {
 
       <div className="container mx-auto px-4 pt-16 sm:pt-24 md:pt-32">
         <div className="flex flex-col items-center justify-center space-y-8 sm:space-y-12 text-center">
-          {/* Title with elegant serif font */}
+          {/* Title */}
           <h1 className="font-serif text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
             PAXMAN
           </h1>
+
+          {/* User Counter */}
+          <div className="flex flex-col items-center space-y-1">
+            <div className="flex items-baseline gap-2 text-zinc-500 dark:text-zinc-400">
+              <span className="font-medium text-base">
+                {displayCount.toLocaleString()}
+              </span>
+              <span className="text-sm">
+                utenti registrati
+              </span>
+            </div>
+          </div>
           
           {/* Decorative line */}
           <div className="w-16 sm:w-24 h-[1px] bg-zinc-800 dark:bg-zinc-200" />
@@ -144,13 +211,17 @@ export default function Home() {
           {/* Topics Navigation */}
           <div className="flex flex-wrap justify-center gap-2 sm:gap-3 max-w-4xl">
             {topics.map((topic) => (
-              <Button
+              <Link 
                 key={topic}
-                variant="bordered"
-                className="cursor-pointer text-xs sm:text-sm font-medium tracking-wider font-sans rounded-full hover:bg-zinc-800 hover:text-zinc-100 transition-all duration-500 ease-in-out"
+                href={`/articles?tag=${encodeURIComponent(topic)}`}
               >
-                {topic}
-              </Button>
+                <Button
+                  variant="bordered"
+                  className="cursor-pointer text-xs sm:text-sm font-medium tracking-wider font-sans rounded-full hover:bg-zinc-800 hover:text-zinc-100 transition-all duration-500 ease-in-out"
+                >
+                  {topic}
+                </Button>
+              </Link>
             ))}
           </div>
 

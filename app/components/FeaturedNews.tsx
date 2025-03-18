@@ -155,9 +155,10 @@ export function FeaturedNews() {
           {/* Desktop view - grid layout */}
           <div className="hidden md:grid md:grid-cols-2 lg:grid-cols-3 gap-6 px-4 max-w-7xl mx-auto">
             {articles.map((article) => (
-              <div 
+              <Link 
+                href={`/article/${article.uuid}`}
                 key={article.uuid}
-                className="group relative cursor-pointer bg-white/5 dark:bg-zinc-800/20 hover:bg-white/10 dark:hover:bg-zinc-800/30 backdrop-blur-lg border border-white/10 dark:border-white/5 rounded-xl shadow-xl overflow-hidden transition-all duration-300 hover:shadow-2xl hover:-translate-y-1"
+                className="block group relative cursor-pointer bg-white/5 dark:bg-zinc-800/20 hover:bg-white/10 dark:hover:bg-zinc-800/30 backdrop-blur-lg border border-white/10 dark:border-white/5 rounded-xl shadow-xl overflow-hidden transition-all duration-300"
               >
                 {/* Immagine principale */}
                 <div className="relative w-full h-48 overflow-hidden">
@@ -227,16 +228,17 @@ export function FeaturedNews() {
                     </div>
                   </div>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
           
           {/* Mobile view */}
           <div className="md:hidden px-4 space-y-4">
             {articles.map((article) => (
-              <div 
+              <Link 
+                href={`/article/${article.uuid}`}
                 key={article.uuid}
-                className="group relative cursor-pointer bg-white/5 dark:bg-zinc-800/20 hover:bg-white/10 dark:hover:bg-zinc-800/30 backdrop-blur-lg border border-white/10 dark:border-white/5 rounded-xl shadow-xl overflow-hidden transition-all duration-300"
+                className="block group relative cursor-pointer bg-white/5 dark:bg-zinc-800/20 hover:bg-white/10 dark:hover:bg-zinc-800/30 backdrop-blur-lg border border-white/10 dark:border-white/5 rounded-xl shadow-xl overflow-hidden transition-all duration-300"
               >
                 <div className="flex gap-4 p-4">
                   {/* Immagine a sinistra */}
@@ -307,7 +309,7 @@ export function FeaturedNews() {
                     </div>
                   </div>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         </>

@@ -72,6 +72,17 @@ export default function Articles() {
     fetchArticles()
   }, [])
 
+  // Aggiungi questo useEffect dopo la dichiarazione degli stati
+  useEffect(() => {
+    // Leggi il tag dall'URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const tagFromUrl = urlParams.get('tag');
+    
+    if (tagFromUrl) {
+      setSelectedTags([tagFromUrl]);
+    }
+  }, []);
+
   // Funzione per estrarre un excerpt dal contenuto
   const getExcerpt = (content: string, maxLength: number = 180) => {
     if (typeof document === 'undefined') return content.substring(0, maxLength) + '...'
@@ -192,9 +203,10 @@ export default function Articles() {
           <div className="grid gap-6 md:gap-8">
             {filteredArticles.length > 0 ? (
               filteredArticles.map((article) => (
-                <article 
+                <Link 
+                  href={`/article/${article.uuid}`}
                   key={article.uuid}
-                  className="group bg-white/5 dark:bg-zinc-800/20 hover:bg-white/10 dark:hover:bg-zinc-800/30 backdrop-blur-lg border border-white/10 dark:border-white/5 rounded-2xl overflow-hidden transition-all duration-300 cursor-pointer"
+                  className="block group bg-white/5 dark:bg-zinc-800/20 hover:bg-white/10 dark:hover:bg-zinc-800/30 backdrop-blur-lg border border-white/10 dark:border-white/5 rounded-2xl overflow-hidden transition-all duration-300"
                 >
                   <div className="flex flex-col sm:flex-row">
                     {/* Immagine (visibile solo su desktop) */}
@@ -263,7 +275,7 @@ export default function Articles() {
                       </div>
                     </div>
                   </div>
-                </article>
+                </Link>
               ))
             ) : (
               <div className="text-center py-12">
