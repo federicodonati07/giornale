@@ -44,7 +44,12 @@ export default function Home() {
   };
 
   // Controlla se l'utente è un amministratore
-  const isAdmin = user?.email === "realeaquila.929@gmail.com";
+  const isAdmin = user?.email && [
+    process.env.NEXT_PUBLIC_ADMIN_EMAIL_1,
+    process.env.NEXT_PUBLIC_ADMIN_EMAIL_2,
+    process.env.NEXT_PUBLIC_ADMIN_EMAIL_3,
+    process.env.NEXT_PUBLIC_ADMIN_EMAIL_4
+  ].includes(user.email);
 
   // Chiudi il menu quando si clicca fuori
   useEffect(() => {
