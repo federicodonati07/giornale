@@ -1,12 +1,13 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import Image from "next/image"
 import { ref, get, update, increment } from "firebase/database"
 import { db, auth } from "../../firebase"
 import { FiHeart, FiShare2, FiEye, FiClock, FiArrowLeft, FiLock } from "react-icons/fi"
 import Link from "next/link"
 import { useParams } from "next/navigation"
+import { QRCodeSVG } from 'qrcode.react'
 
 interface ArticleData {
   uuid: string
@@ -41,6 +42,9 @@ export default function Article() {
   const [user, setUser] = useState(auth.currentUser)
   const [actionMessage, setActionMessage] = useState<string>('')
   const [hasViewed, setHasViewed] = useState(false)
+  const [showShareModal, setShowShareModal] = useState(false)
+  const [articleUrl, setArticleUrl] = useState('')
+  const qrRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
@@ -115,6 +119,13 @@ export default function Article() {
     setTimeout(() => setActionMessage(''), 3000)
   }, [])
 
+  // Inizializza l'URL dell'articolo quando il componente viene montato
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setArticleUrl(window.location.href)
+    }
+  }, [])
+
   const handleLike = async () => {
     if (!user) return
     
@@ -155,12 +166,13 @@ export default function Article() {
   }
 
   const handleShare = async () => {
-    if (!user) return
-    
     try {
-      const url = window.location.href
-      await navigator.clipboard.writeText(url)
+      await navigator.clipboard.writeText(articleUrl)
       
+      // Prima mostra il modal, poi aggiorna le statistiche
+      setShowShareModal(true)
+      
+      // Aggiorna le statistiche di condivisione
       const articleRef = ref(db, `articoli/${params.id}`)
       await update(articleRef, {
         shared: increment(1)
@@ -171,6 +183,58 @@ export default function Article() {
     } catch (error) {
       console.error("Errore nella condivisione:", error)
       showMessage("Errore nella condivisione")
+    }
+  }
+
+  // Modifica la funzione downloadQR per gestire meglio il download
+  const downloadQR = () => {
+    try {
+      if (!qrRef.current) return
+
+      // Trova il primo elemento svg nel qrRef
+      const svg = qrRef.current.querySelector('svg')
+      if (!svg) {
+        console.error('SVG non trovato')
+        return
+      }
+
+      // Crea un canvas
+      const canvas = document.createElement('canvas')
+      const ctx = canvas.getContext('2d')
+      if (!ctx) {
+        console.error('Impossibile ottenere il contesto 2D')
+        return
+      }
+
+      // Imposta le dimensioni del canvas
+      canvas.width = 300
+      canvas.height = 300
+
+      // Crea un'immagine dal SVG
+      const svgData = new XMLSerializer().serializeToString(svg)
+      const img = document.createElement('img')
+      
+      img.onload = () => {
+        // Disegna uno sfondo bianco
+        ctx.fillStyle = 'white'
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
+        
+        // Disegna il QR code
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+        
+        // Crea il link per il download
+        const link = document.createElement('a')
+        link.download = `qrcode-${article?.titolo?.replace(/\s+/g, '-').toLowerCase() || 'article'}.png`
+        link.href = canvas.toDataURL('image/png')
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+      }
+
+      img.src = 'data:image/svg+xml;base64,' + btoa(svgData)
+    } catch (error) {
+      console.error('Errore durante il download del QR code:', error)
+      showMessage('Errore durante il download del QR code')
     }
   }
 
@@ -297,7 +361,7 @@ export default function Article() {
   };
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-zinc-100 to-zinc-200/90 dark:from-zinc-900 dark:to-zinc-800">
+    <main className="min-h-screen bg-gradient-to-br from-zinc-900 to-zinc-800">
       {/* Toast message */}
       {actionMessage && (
         <div className="fixed top-4 right-4 z-50 px-4 py-2 bg-zinc-800 dark:bg-zinc-700 text-white rounded-lg shadow-lg transition-opacity duration-300">
@@ -388,7 +452,7 @@ export default function Article() {
 
           {/* Contenuto */}
           <span 
-            className="text-lg leading-9 tracking-[0.04em] text-zinc-900 dark:text-zinc-300
+            className="text-lg leading-9 tracking-[0.04em] text-zinc-300
               font-montserrat block space-y-6 [&>p]:mb-6 
               [&>p]:leading-relaxed [&>p]:tracking-wide
               [&>*]:tracking-wide [&>*]:leading-relaxed
@@ -541,9 +605,83 @@ export default function Article() {
                 </button>
               </div>
             </div>
+            
+            {/* Pulsante per tornare in cima */}
+            <div className="flex justify-center mt-10">
+              <button
+                onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-full transition-colors duration-300"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                </svg>
+                <span>Torna in cima</span>
+              </button>
+            </div>
           </div>
         </article>
       </div>
+
+      {/* Modal per la condivisione */}
+      {showShareModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="relative bg-zinc-800 rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl border border-zinc-700">
+            <button 
+              onClick={() => setShowShareModal(false)}
+              className="absolute top-3 right-3 text-zinc-400 hover:text-white"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            
+            <h3 className="text-xl font-semibold text-white mb-6">Condividi articolo</h3>
+            
+            <div className="flex flex-col items-center mb-6">
+              <div ref={qrRef} className="bg-white p-4 rounded-lg mb-4">
+                <QRCodeSVG 
+                  value={articleUrl} 
+                  size={200}
+                  level="H"
+                  includeMargin={false}
+                  fgColor="#000000"
+                  bgColor="#FFFFFF"
+                />
+              </div>
+              
+              <button
+                onClick={downloadQR}
+                className="bg-amber-500 hover:bg-amber-600 text-white py-2 px-4 rounded-lg flex items-center transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                Scarica QR code
+              </button>
+            </div>
+            
+            <div className="flex items-center gap-2 bg-zinc-700 p-3 rounded-lg">
+              <input
+                type="text"
+                value={articleUrl}
+                readOnly
+                className="flex-1 bg-transparent text-zinc-200 text-sm outline-none"
+              />
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(articleUrl);
+                  showMessage('Link copiato!');
+                }}
+                className="bg-zinc-600 hover:bg-zinc-500 text-zinc-200 p-1.5 rounded-lg transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
 } 

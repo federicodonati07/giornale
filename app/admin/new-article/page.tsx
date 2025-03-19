@@ -663,7 +663,7 @@ export default function NewArticlePage() {
               <button
                 type="button"
                 onClick={() => setIsPrivate(!isPrivate)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 cursor-pointerfocus:outline-none
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 cursor-pointer focus:outline-none
                   ${isPrivate 
                     ? 'bg-amber-500' 
                     : 'bg-zinc-300 dark:bg-zinc-600'}`}
