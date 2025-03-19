@@ -35,6 +35,7 @@ interface ArticleData {
   tag: string;
   partecipanti?: string;
   additionalLinks?: Array<{ url: string, label: string }>;
+  secondaryNotes?: Array<{ id: string, content: string }>;
   uuid: string;
   creazione: string;
   upvote: number;
@@ -80,6 +81,10 @@ export default function NewArticlePage() {
 
   // Aggiungi questo stato
   const [isPrivate, setIsPrivate] = useState(false);
+
+  // Aggiungi questi stati
+  const [secondaryNotes, setSecondaryNotes] = useState<Array<{ id: string, content: string }>>([]);
+  const [newNoteContent, setNewNoteContent] = useState('');
 
   // Verifica se l'utente è autorizzato
   useEffect(() => {
@@ -256,13 +261,14 @@ export default function NewArticlePage() {
         tag: selectedTags.join(", "),
         partecipanti,
         additionalLinks,
+        secondaryNotes,
         uuid: articleUuid,
         creazione: new Date().toISOString(),
         upvote: 0,
         shared: 0,
         view: 0,
         userId: currentUser.uid,
-        isPrivate
+        isPrivate,
       }
 
       try {
@@ -316,50 +322,83 @@ export default function NewArticlePage() {
     }
   };
 
-  // Funzione per gestire la formattazione
+  // Riscrittura completa della funzione handleTextFormatting
   const handleTextFormatting = (format: 'bold' | 'italic' | 'underline' | 'highlight' | 'xl') => {
     const selection = window.getSelection();
     if (!selection || !selection.rangeCount) return;
     
     document.execCommand('styleWithCSS', false, 'true');
     
-    // Gestione di tutti i formati incluso highlight
-    const commands = {
-      bold: 'bold',
-      italic: 'italic',
-      underline: 'underline',
-      highlight: 'backColor'
-    };
-    
-    if (format === 'xl') {
-      document.execCommand('fontSize', false, '5');
-      setActiveFormats(prev => ({
-        ...prev,
-        xl: !prev.xl
-      }));
-    } else if (format === 'highlight') {
+    // Sistema di gestione uniforme per tutti i formati
+    if (format === 'highlight') {
+      // Caso speciale per l'evidenziazione
       const currentColor = document.queryCommandValue('backColor');
-      const isHighlighted = currentColor === 'rgb(251, 146, 60)'; // amber-500
-      document.execCommand(commands[format], false, isHighlighted ? 'inherit' : '#fb923c');
+      const isHighlighted = currentColor === 'rgb(251, 146, 60)';
+      document.execCommand('backColor', false, isHighlighted ? 'inherit' : '#fb923c');
       setActiveFormats(prev => ({
         ...prev,
         highlight: !isHighlighted
       }));
+    } else if (format === 'xl') {
+      // Togliamo prima il formato per assicurarci che non rimanga attivo
+      document.execCommand('fontSize', false, '3'); // Usa un valore standard
+      
+      // Verifica se il testo selezionato è già in XL
+      const isXL = activeFormats.xl;
+      
+      if (isXL) {
+        // Togliamo il formato grande
+        document.execCommand('fontSize', false, '3'); // Ripristina dimensione normale
+        document.execCommand('removeFormat', false); // Rimuove tutti i formati
+        setActiveFormats(prev => ({
+          ...prev,
+          xl: false
+        }));
+      } else {
+        // Applichiamo il formato grande (usa la classe in uno stile inline)
+        document.execCommand('fontSize', false, '5'); // Imposta dimensione grande
+        
+        // Imposta anche il grassetto per rendere il testo più visibile
+        document.execCommand('bold', false);
+        
+        setActiveFormats(prev => ({
+          ...prev,
+          xl: true
+        }));
+      }
     } else {
+      // Altri formati (bold, italic, underline)
+      const commands = {
+        bold: 'bold',
+        italic: 'italic',
+        underline: 'underline'
+      };
+      
       document.execCommand(commands[format], false);
       setActiveFormats(prev => ({
         ...prev,
         [format]: document.queryCommandState(commands[format])
       }));
     }
+    
+    handleContentChange();
   };
 
-  // Modifica la funzione handleContentChange per preservare i link
+  // Aggiorna la funzione handleContentChange per gestire meglio lo stato XL
   const handleContentChange = () => {
     const editorContent = document.getElementById('article-content');
     if (editorContent) {
-      // Salva il contenuto HTML
+      // Aggiorna il contenuto
       setContenuto(editorContent.innerHTML);
+      
+      // Aggiorna lo stato dei formati attivi
+      setActiveFormats({
+        bold: document.queryCommandState('bold'),
+        italic: document.queryCommandState('italic'),
+        underline: document.queryCommandState('underline'),
+        highlight: document.queryCommandValue('backColor') === 'rgb(251, 146, 60)',
+        xl: document.queryCommandValue('fontSize') === '5' // Verifica se è attiva la dimensione 5
+      });
     }
   };
 
@@ -373,6 +412,65 @@ export default function NewArticlePage() {
     setAdditionalLinks([...additionalLinks, { url: newLinkUrl, label: newLinkLabel }]);
     setNewLinkUrl('');
     setNewLinkLabel('');
+  };
+
+  // Aggiungi queste funzioni per gestire le note secondarie
+  const handleAddSecondaryNote = () => {
+    if (!newNoteContent.trim()) {
+      showNotification('error', 'La nota non può essere vuota');
+      return;
+    }
+
+    const newNote = {
+      id: uuidv4(),
+      content: newNoteContent.trim()
+    };
+
+    setSecondaryNotes(prev => [...prev, newNote]);
+    setNewNoteContent('');
+    
+    // Inserisci il riferimento nel testo
+    const selection = window.getSelection();
+    if (selection && selection.rangeCount > 0) {
+      const noteRef = document.createElement('sup');
+      noteRef.textContent = `[${secondaryNotes.length + 1}]`;
+      noteRef.className = 'note-ref';
+      noteRef.dataset.noteId = newNote.id;
+      
+      const range = selection.getRangeAt(0);
+      range.deleteContents();
+      range.insertNode(noteRef);
+      
+      // Sposta il cursore dopo la nota
+      range.setStartAfter(noteRef);
+      range.setEndAfter(noteRef);
+      selection.removeAllRanges();
+      selection.addRange(range);
+      
+      handleContentChange();
+    }
+    
+    showNotification('success', 'Nota aggiunta con successo');
+  };
+
+  const handleRemoveSecondaryNote = (idToRemove: string) => {
+    // Rimuovi la nota dall'array
+    setSecondaryNotes(prev => prev.filter(note => note.id !== idToRemove));
+    
+    // Rimuovi il riferimento dal testo
+    const editorContent = document.getElementById('article-content');
+    if (editorContent) {
+      const noteRefs = editorContent.querySelectorAll(`.note-ref[data-note-id="${idToRemove}"]`);
+      noteRefs.forEach(ref => ref.remove());
+      
+      // Aggiorna la numerazione delle note rimaste
+      const allRefs = Array.from(editorContent.querySelectorAll('.note-ref'));
+      allRefs.forEach((ref, index) => {
+        ref.textContent = `[${index + 1}]`;
+      });
+      
+      handleContentChange();
+    }
   };
 
   if (loading) {
@@ -669,7 +767,8 @@ export default function NewArticlePage() {
                     document.execCommand('insertParagraph', false);
                   }
                 }}
-                className="min-h-[300px] w-full p-4 bg-white/5 border border-white/20 rounded-xl 
+                className={`
+                  min-h-[300px] w-full p-4 bg-white/5 border border-white/20 rounded-xl 
                   focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 
                   transition-all duration-300 text-zinc-900 dark:text-zinc-50 
                   outline-none font-montserrat overflow-auto
@@ -682,7 +781,14 @@ export default function NewArticlePage() {
                   [&_a]:transition-colors [&_a]:duration-200
                   [&_a]:pointer-events-auto
                   [&_[style*='background-color: rgb(251, 146, 60)']]:text-zinc-900
-                  [&_[style*='background-color: rgb(251, 146, 60)']]:bg-amber-500"
+                  [&_[style*='background-color: rgb(251, 146, 60)']]:bg-amber-500
+                  [&_font[size='5']]:text-2xl
+                  [&_font[size='5']]:font-semibold
+                  [&_font[size='5']]:leading-relaxed
+                  [&_font[size='5']]:tracking-wide
+                  [&_font[size='5']]:block
+                  [&_font[size='5']]:my-4
+                `}
                 data-placeholder="Inizia a scrivere il tuo articolo..."
               />
               
@@ -690,6 +796,69 @@ export default function NewArticlePage() {
                 Usa i pulsanti sopra o le scorciatoie da tastiera per formattare il testo. 
                 Premi Enter per un nuovo paragrafo, Shift+Enter per una nuova riga.
               </p>
+            </div>
+
+            {/* Note secondarie */}
+            <div className="md:col-span-2 mt-6">
+              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+                Note secondarie
+              </label>
+              <div className="space-y-4">
+                {/* Form per aggiungere nuove note */}
+                <div className="flex gap-4">
+                  <input
+                    type="text"
+                    value={newNoteContent}
+                    onChange={(e) => setNewNoteContent(e.target.value)}
+                    placeholder="Inserisci una nota secondaria"
+                    className="flex-1 p-2 bg-white/5 border border-white/20 rounded-lg focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
+                  />
+                  <button
+                    onClick={handleAddSecondaryNote}
+                    className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
+                  >
+                    Aggiungi Nota
+                  </button>
+                </div>
+
+                {/* Lista delle note aggiunte */}
+                {secondaryNotes.length > 0 && (
+                  <div className="p-4 bg-white/5 border border-white/20 rounded-xl">
+                    <h4 className="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-3">
+                      Note inserite ({secondaryNotes.length})
+                    </h4>
+                    <div className="space-y-3">
+                      {secondaryNotes.map((note, index) => (
+                        <div 
+                          key={note.id}
+                          className="flex items-start justify-between gap-3 p-3 bg-zinc-100 dark:bg-zinc-800/50 rounded-lg"
+                        >
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium text-amber-600 dark:text-amber-400">
+                                [{index + 1}]
+                              </span>
+                              <p className="text-sm text-zinc-700 dark:text-zinc-300">
+                                {note.content}
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleRemoveSecondaryNote(note.id)}
+                            className="text-zinc-400 hover:text-red-500 transition-colors"
+                          >
+                            <FiX className="h-5 w-5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <p className="text-xs text-zinc-500">
+                  Le note secondarie appariranno in fondo all&apos;articolo e saranno riferite nel testo come [1], [2], ecc.
+                </p>
+              </div>
             </div>
 
             {/* Caricamento immagine */}

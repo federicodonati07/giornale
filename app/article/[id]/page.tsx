@@ -23,6 +23,14 @@ interface ArticleData {
   likes?: string[]
   additionalLinks?: Array<{ url: string, label: string }>
   isPrivate: boolean
+  notes?: Array<{
+    id: string;
+    text: string;
+    note: string;
+    startOffset: number;
+    endOffset: number;
+  }>
+  secondaryNotes?: Array<{ id: string, content: string }>
 }
 
 export default function Article() {
@@ -260,6 +268,34 @@ export default function Article() {
     )
   }
 
+  // Modifica la funzione che renderizza il contenuto per includere le note
+  const renderContentWithNotes = (content: string, notes?: ArticleData['notes']) => {
+    if (!notes || notes.length === 0) return content;
+    
+    const contentWithNotes = content;
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(contentWithNotes, 'text/html');
+
+    notes.forEach(note => {
+      const noteElements = doc.querySelectorAll(`[data-note-id="${note.id}"]`);
+      noteElements.forEach(element => {
+        const noteWrapper = document.createElement('span');
+        noteWrapper.className = 'note-text';
+        noteWrapper.innerHTML = `
+          ${element.innerHTML}
+          <svg class="note-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" 
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span class="note-tooltip">${note.note}</span>
+        `;
+        element.replaceWith(noteWrapper);
+      });
+    });
+
+    return doc.body.innerHTML;
+  };
+
   return (
     <main className="min-h-screen bg-gradient-to-br from-zinc-100 to-zinc-200/90 dark:from-zinc-900 dark:to-zinc-800">
       {/* Toast message */}
@@ -351,23 +387,72 @@ export default function Article() {
           </div>
 
           {/* Contenuto */}
-          <div 
-            className="prose prose-zinc dark:prose-invert max-w-none mb-12
-              prose-headings:font-montserrat prose-headings:tracking-wider prose-headings:text-zinc-900 dark:prose-headings:text-zinc-50
-              prose-h1:text-4xl prose-h2:text-3xl prose-h3:text-2xl
-              prose-a:text-amber-500 hover:prose-a:text-amber-600 dark:prose-a:text-amber-400 dark:hover:prose-a:text-amber-300
-              prose-strong:text-zinc-900 dark:prose-strong:text-zinc-50
-              prose-ul:list-disc prose-ol:list-decimal
-              prose-li:text-lg prose-li:tracking-wider prose-li:text-zinc-700 dark:prose-li:text-zinc-300"
-          >
-            <span 
-              className="text-lg leading-9 tracking-[0.04em] text-zinc-900 dark:text-zinc-300
-                font-montserrat block space-y-6 [&>p]:mb-6 
-                [&>p]:leading-relaxed [&>p]:tracking-wide
-                [&>*]:tracking-wide [&>*]:leading-relaxed"
-              dangerouslySetInnerHTML={{ __html: article.contenuto }}
-            />
-          </div>
+          <span 
+            className="text-lg leading-9 tracking-[0.04em] text-zinc-900 dark:text-zinc-300
+              font-montserrat block space-y-6 [&>p]:mb-6 
+              [&>p]:leading-relaxed [&>p]:tracking-wide
+              [&>*]:tracking-wide [&>*]:leading-relaxed
+              [&_.note-text]:relative
+              [&_.note-text]:border-b
+              [&_.note-text]:border-dashed
+              [&_.note-text]:border-amber-500/50
+              [&_.note-text]:cursor-help
+              [&_.note-text]:inline-flex
+              [&_.note-text]:items-center
+              [&_.note-text]:gap-0.5
+              [&_.note-text]:group
+              [&_.note-icon]:text-amber-500/70
+              [&_.note-icon]:h-3.5
+              [&_.note-icon]:w-3.5
+              [&_.note-icon]:inline
+              [&_.note-tooltip]:invisible
+              [&_.note-tooltip]:opacity-0
+              [&_.note-tooltip]:absolute
+              [&_.note-tooltip]:-top-2
+              [&_.note-tooltip]:left-1/2
+              [&_.note-tooltip]:-translate-x-1/2
+              [&_.note-tooltip]:-translate-y-full
+              [&_.note-tooltip]:px-3
+              [&_.note-tooltip]:py-2
+              [&_.note-tooltip]:rounded-lg
+              [&_.note-tooltip]:bg-zinc-800
+              [&_.note-tooltip]:text-zinc-100
+              [&_.note-tooltip]:text-sm
+              [&_.note-tooltip]:shadow-xl
+              [&_.note-tooltip]:backdrop-blur-sm
+              [&_.note-tooltip]:whitespace-normal
+              [&_.note-tooltip]:max-w-xs
+              [&_.note-tooltip]:z-50
+              [&_.note-tooltip]:transition-all
+              [&_.note-tooltip]:duration-200
+              [&_.note-text:hover_.note-tooltip]:visible
+              [&_.note-text:hover_.note-tooltip]:opacity-100
+              [&_.note-text:hover_.note-tooltip]:translate-y-0"
+            dangerouslySetInnerHTML={{ 
+              __html: renderContentWithNotes(article.contenuto, article.notes) 
+            }}
+          />
+
+          {/* Note secondarie */}
+          {article.secondaryNotes && article.secondaryNotes.length > 0 && (
+            <div className="border-t border-zinc-200 dark:border-zinc-700 pt-6 mt-8">
+              <h3 className="text-sm font-medium text-zinc-500 dark:text-zinc-400 mb-4">
+                Note
+              </h3>
+              <div className="space-y-3">
+                {article.secondaryNotes.map((note, index) => (
+                  <div key={note.id} className="flex items-start gap-2 text-xs font-montserrat">
+                    <span className="font-medium text-amber-600 dark:text-amber-400 flex-shrink-0">
+                      [{index + 1}]
+                    </span>
+                    <p className="text-zinc-600 dark:text-zinc-400 tracking-wide leading-relaxed">
+                      {note.content}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Link aggiuntivi con design minimal */}
           {article.additionalLinks && article.additionalLinks.length > 0 && (
