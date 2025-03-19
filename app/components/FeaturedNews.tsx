@@ -107,6 +107,30 @@ export function FeaturedNews() {
 
   return (
     <section className="w-full py-4 sm:py-8">
+      <style jsx global>{`
+        @keyframes slideUp {
+          0% {
+            opacity: 0;
+            transform: translateY(30px);
+          }
+          100% {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        .card-animate {
+          animation: slideUp 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+          opacity: 0;
+        }
+        
+        .card-animate:nth-child(1) { animation-delay: 0.1s; }
+        .card-animate:nth-child(2) { animation-delay: 0.2s; }
+        .card-animate:nth-child(3) { animation-delay: 0.3s; }
+        .card-animate:nth-child(4) { animation-delay: 0.4s; }
+        .card-animate:nth-child(5) { animation-delay: 0.5s; }
+      `}</style>
+
       <div className="flex flex-col items-center space-y-2 mb-8">
         <h2 className="text-xl md:text-2xl font-serif font-bold text-center text-zinc-900 dark:text-zinc-50">
           Notizie in Evidenza
@@ -135,7 +159,7 @@ export function FeaturedNews() {
       {loading ? (
         // Stato di caricamento moderno
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 px-4 max-w-7xl mx-auto">
-          {[...Array(5)].map((_, index) => (
+          {[...Array(3)].map((_, index) => (
             <div key={index} className="flex flex-col rounded-xl overflow-hidden bg-white/5 dark:bg-zinc-800/20 backdrop-blur-md border border-white/10 dark:border-white/5 shadow-xl h-[400px] animate-pulse">
               <div className="h-48 bg-gradient-to-r from-zinc-200/20 to-zinc-300/20 dark:from-zinc-700/30 dark:to-zinc-600/30"></div>
               <div className="p-6 flex flex-col gap-4">
@@ -154,11 +178,11 @@ export function FeaturedNews() {
         <>
           {/* Desktop view - grid layout */}
           <div className="hidden md:grid md:grid-cols-2 lg:grid-cols-3 gap-6 px-4 max-w-7xl mx-auto">
-            {articles.map((article) => (
+            {articles.slice(0, 3).map((article) => (
               <Link 
                 href={`/article/${article.uuid}`}
                 key={article.uuid}
-                className="block group relative cursor-pointer bg-white/5 dark:bg-zinc-800/20 hover:bg-white/10 dark:hover:bg-zinc-800/30 backdrop-blur-lg border border-white/10 dark:border-white/5 rounded-xl shadow-xl overflow-hidden transition-all duration-300"
+                className="card-animate block group relative cursor-pointer bg-white/5 dark:bg-zinc-800/20 hover:bg-white/10 dark:hover:bg-zinc-800/30 backdrop-blur-lg border border-white/10 dark:border-white/5 rounded-xl shadow-xl overflow-hidden transition-all duration-300"
               >
                 {/* Immagine principale */}
                 <div className="relative w-full h-48 overflow-hidden">
@@ -234,11 +258,11 @@ export function FeaturedNews() {
           
           {/* Mobile view */}
           <div className="md:hidden px-4 space-y-4">
-            {articles.map((article) => (
+            {articles.slice(0, 3).map((article) => (
               <Link 
                 href={`/article/${article.uuid}`}
                 key={article.uuid}
-                className="block group relative cursor-pointer bg-white/5 dark:bg-zinc-800/20 hover:bg-white/10 dark:hover:bg-zinc-800/30 backdrop-blur-lg border border-white/10 dark:border-white/5 rounded-xl shadow-xl overflow-hidden transition-all duration-300"
+                className="card-animate block group relative cursor-pointer bg-white/5 dark:bg-zinc-800/20 hover:bg-white/10 dark:hover:bg-zinc-800/30 backdrop-blur-lg border border-white/10 dark:border-white/5 rounded-xl shadow-xl overflow-hidden transition-all duration-300"
               >
                 <div className="flex gap-4 p-4">
                   {/* Immagine a sinistra */}

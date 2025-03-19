@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { Button } from "@heroui/react"
-import { FiHeart, FiUser, FiLogOut, FiPlus, FiChevronDown, FiList } from "react-icons/fi"
+import { FiHeart, FiUser, FiLogOut, FiPlus, FiChevronDown, FiList, FiInstagram } from "react-icons/fi"
 import { FeaturedNews } from "./components/FeaturedNews"
 import Link from "next/link"
 import { onAuthStateChanged, signOut, User } from "firebase/auth"
@@ -230,8 +230,8 @@ export default function Home() {
             ))}
           </div>
 
-          {/* Support Button */}
-          <div className="flex items-center">
+          {/* Support Button and Instagram Icon */}
+          <div className="flex items-center gap-4">
             <Button
               variant="solid"
               className="bg-gradient-to-r rounded-full from-amber-500 to-orange-600 text-white shadow-lg cursor-pointer transition-all duration-500 ease-in-out hover:opacity-80 hover:shadow-2xl hover:scale-105 text-sm sm:text-base font-medium tracking-wide"
@@ -239,6 +239,15 @@ export default function Home() {
               <FiHeart className="mr-2 h-4 w-4" />
               Supporta il progetto
             </Button>
+
+            <a 
+              href="https://www.instagram.com/il_paxman/" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="p-2 rounded-full bg-white/10 dark:bg-zinc-800/50 backdrop-blur-md border border-white/20 text-zinc-800 dark:text-zinc-200 hover:bg-white/20 dark:hover:bg-zinc-700/60 transition-all duration-300"
+            >
+              <FiInstagram className="h-5 w-5" />
+            </a>
           </div>
 
           {/* Featured News Section */}
