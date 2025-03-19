@@ -37,8 +37,7 @@ export const metadata: Metadata = {
   title: "PAXMAN NEWS",
   description: "Il portale di notizie di Paxman",
   icons: {
-    icon: '/favicon.ico',
-    shortcut: '/favicon.ico'
+    icon: "/favicon.ico",
   },
 };
 
@@ -50,7 +49,6 @@ export default function RootLayout({
   return (
     <html lang="it" className={`${geistSans.variable} ${geistMono.variable} ${inter.variable} ${merriweather.variable} ${montserrat.variable} antialiased dark`}>
       <head>
-        <link rel="icon" href="/favicon.ico" />
         <meta name="theme-color" content="#27272a" />
       </head>
       <body className="bg-zinc-900">
