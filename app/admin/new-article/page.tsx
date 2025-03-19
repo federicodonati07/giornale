@@ -21,7 +21,7 @@ const availableCategories = [
   "SPORT",
   "AVIAZIONE",
   "SCIENZE",
-  "MODA",
+  "MEDICINA",
   "NATURA",
   "ITALIA"
 ]
@@ -69,7 +69,8 @@ export default function NewArticlePage() {
     bold: false,
     italic: false,
     underline: false,
-    highlight: false
+    highlight: false,
+    xl: false
   });
 
   // Aggiungi questo stato per i link aggiuntivi
@@ -83,12 +84,18 @@ export default function NewArticlePage() {
   // Verifica se l'utente è autorizzato
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user && user.email === "realeaquila.929@gmail.com") {
+      const adminEmails = [
+        process.env.NEXT_PUBLIC_ADMIN_EMAIL_1,
+        process.env.NEXT_PUBLIC_ADMIN_EMAIL_2,
+        process.env.NEXT_PUBLIC_ADMIN_EMAIL_3,
+        process.env.NEXT_PUBLIC_ADMIN_EMAIL_4
+      ]
+      
+      if (user && adminEmails.includes(user.email || '')) {
         setIsAdmin(true)
-        setAutore(user.displayName || user.email || "")
+        setAutore(user.displayName || user.email || '')
       } else {
-        // Reindirizza alla home se non è l'admin
-        router.push("/")
+        router.push('/')
       }
       setLoading(false)
     })
@@ -310,7 +317,7 @@ export default function NewArticlePage() {
   };
 
   // Funzione per gestire la formattazione
-  const handleTextFormatting = (format: 'bold' | 'italic' | 'underline' | 'highlight') => {
+  const handleTextFormatting = (format: 'bold' | 'italic' | 'underline' | 'highlight' | 'xl') => {
     const selection = window.getSelection();
     if (!selection || !selection.rangeCount) return;
     
@@ -324,7 +331,13 @@ export default function NewArticlePage() {
       highlight: 'backColor'
     };
     
-    if (format === 'highlight') {
+    if (format === 'xl') {
+      document.execCommand('fontSize', false, '5');
+      setActiveFormats(prev => ({
+        ...prev,
+        xl: !prev.xl
+      }));
+    } else if (format === 'highlight') {
       const currentColor = document.queryCommandValue('backColor');
       const isHighlighted = currentColor === 'rgb(251, 146, 60)'; // amber-500
       document.execCommand(commands[format], false, isHighlighted ? 'inherit' : '#fb923c');
@@ -574,14 +587,14 @@ export default function NewArticlePage() {
               </label>
               
               {/* Barra degli strumenti */}
-              <div className="mb-2 flex gap-2 sticky top-0 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm p-2 rounded-lg z-10">
+              <div className="mb-2 flex gap-2 sticky top-0 bg-zinc-900/80 backdrop-blur-sm p-2 rounded-lg z-10">
                 <button
                   type="button"
                   onClick={() => handleTextFormatting('bold')}
                   className={`p-2 rounded-lg transition-colors cursor-pointer ${
                     activeFormats.bold 
                       ? 'bg-amber-500 text-white' 
-                      : 'bg-white/10 hover:bg-white/20 dark:bg-zinc-800/50 dark:hover:bg-zinc-800'
+                      : 'bg-zinc-800/50 hover:bg-zinc-800'
                   }`}
                   title="Grassetto (Ctrl+B)"
                 >
@@ -593,7 +606,7 @@ export default function NewArticlePage() {
                   className={`p-2 rounded-lg transition-colors cursor-pointer ${
                     activeFormats.italic 
                       ? 'bg-amber-500 text-white' 
-                      : 'bg-white/10 hover:bg-white/20 dark:bg-zinc-800/50 dark:hover:bg-zinc-800'
+                      : 'bg-zinc-800/50 hover:bg-zinc-800'
                   }`}
                   title="Corsivo (Ctrl+I)"
                 >
@@ -605,7 +618,7 @@ export default function NewArticlePage() {
                   className={`p-2 rounded-lg transition-colors cursor-pointer ${
                     activeFormats.underline 
                       ? 'bg-amber-500 text-white' 
-                      : 'bg-white/10 hover:bg-white/20 dark:bg-zinc-800/50 dark:hover:bg-zinc-800'
+                      : 'bg-zinc-800/50 hover:bg-zinc-800'
                   }`}
                   title="Sottolineato (Ctrl+U)"
                 >
@@ -617,7 +630,7 @@ export default function NewArticlePage() {
                   className={`p-2 rounded-lg transition-colors cursor-pointer ${
                     activeFormats.highlight 
                       ? 'bg-amber-500 text-white' 
-                      : 'bg-white/10 hover:bg-white/20 dark:bg-zinc-800/50 dark:hover:bg-zinc-800'
+                      : 'bg-zinc-800/50 hover:bg-zinc-800'
                   }`}
                   title="Evidenzia"
                 >
@@ -626,6 +639,22 @@ export default function NewArticlePage() {
                       ? 'text-white'
                       : 'bg-amber-400/30 text-amber-600 dark:text-amber-400'
                   }`}>H</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleTextFormatting('xl')}
+                  className={`p-2 rounded-lg transition-colors cursor-pointer ${
+                    activeFormats.xl 
+                      ? 'bg-amber-500 text-white' 
+                      : 'bg-zinc-800/50 hover:bg-zinc-800'
+                  }`}
+                  title="Testo Grande"
+                >
+                  <span className={`text-lg font-bold ${
+                    activeFormats.xl
+                      ? 'text-white'
+                      : 'text-zinc-400'
+                  }`}>XL</span>
                 </button>
               </div>
 

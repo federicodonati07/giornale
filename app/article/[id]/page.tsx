@@ -22,6 +22,7 @@ interface ArticleData {
   partecipanti?: string[]
   likes?: string[]
   additionalLinks?: Array<{ url: string, label: string }>
+  isPrivate: boolean
 }
 
 export default function Article() {
@@ -188,23 +189,24 @@ export default function Article() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-zinc-100 to-zinc-200/90 dark:from-zinc-900 dark:to-zinc-800 flex items-center justify-center">
-        <div className="animate-pulse text-zinc-600 dark:text-zinc-400">
+      <div className="min-h-screen bg-gradient-to-br from-zinc-900 to-zinc-800 flex items-center justify-center">
+        <div className="animate-pulse text-zinc-400">
           Caricamento...
         </div>
       </div>
     )
   }
 
-  if (!user) {
+  // Verifica se l'articolo è privato e l'utente non è autenticato
+  if (article?.isPrivate && !user) {
     return (
-      <main className="min-h-screen bg-gradient-to-br from-zinc-100 to-zinc-200/90 dark:from-zinc-900 dark:to-zinc-800">
+      <main className="min-h-screen bg-gradient-to-br from-zinc-900 to-zinc-800">
         <div className="container mx-auto px-4 py-8 sm:py-12">
           {/* Header con navigazione */}
           <div className="mb-8">
             <Link 
               href="/articles"
-              className="inline-flex items-center text-sm text-zinc-600 dark:text-zinc-400 hover:text-amber-500 dark:hover:text-amber-400 transition-colors duration-300 mb-4"
+              className="inline-flex items-center text-sm text-zinc-400 hover:text-amber-500 transition-colors duration-300 mb-4"
             >
               <FiArrowLeft className="mr-2 h-4 w-4" />
               Torna agli articoli
@@ -215,23 +217,23 @@ export default function Article() {
           <div className="relative">
             {/* Mostra l'articolo blurrato */}
             <div className="blur-md opacity-50">
-              <div className="relative w-full aspect-video max-w-4xl mx-auto mb-8 rounded-2xl overflow-hidden bg-zinc-300 dark:bg-zinc-700" />
+              <div className="relative w-full aspect-video max-w-4xl mx-auto mb-8 rounded-2xl overflow-hidden bg-zinc-700" />
               <div className="max-w-4xl mx-auto space-y-4">
-                <div className="h-12 bg-zinc-300 dark:bg-zinc-700 rounded-lg" />
-                <div className="h-4 bg-zinc-300 dark:bg-zinc-700 rounded-lg w-3/4" />
-                <div className="h-4 bg-zinc-300 dark:bg-zinc-700 rounded-lg" />
-                <div className="h-4 bg-zinc-300 dark:bg-zinc-700 rounded-lg w-2/3" />
+                <div className="h-12 bg-zinc-700 rounded-lg" />
+                <div className="h-4 bg-zinc-700 rounded-lg w-3/4" />
+                <div className="h-4 bg-zinc-700 rounded-lg" />
+                <div className="h-4 bg-zinc-700 rounded-lg w-2/3" />
               </div>
             </div>
 
             {/* Overlay di accesso */}
             <div className="absolute inset-0 flex items-center justify-center">
-              <div className="text-center p-8 bg-white/10 dark:bg-zinc-800/30 rounded-2xl backdrop-blur-lg border border-white/20 dark:border-white/10">
+              <div className="text-center p-8 bg-zinc-800/30 rounded-2xl backdrop-blur-lg border border-zinc-700">
                 <FiLock className="mx-auto h-12 w-12 text-amber-500 mb-4" />
-                <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50 mb-4">
+                <h2 className="text-2xl font-bold text-zinc-50 mb-4">
                   Contenuto riservato
                 </h2>
-                <p className="text-zinc-600 dark:text-zinc-400 mb-6">
+                <p className="text-zinc-400 mb-6">
                   Effettua l&apos;accesso per leggere l&apos;articolo
                 </p>
                 <Link
@@ -250,8 +252,8 @@ export default function Article() {
 
   if (!article) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-zinc-100 to-zinc-200/90 dark:from-zinc-900 dark:to-zinc-800 flex items-center justify-center">
-        <div className="text-zinc-600 dark:text-zinc-400">
+      <div className="min-h-screen bg-gradient-to-br from-zinc-900 to-zinc-800 flex items-center justify-center">
+        <div className="text-zinc-400">
           Articolo non trovato
         </div>
       </div>
@@ -359,7 +361,7 @@ export default function Article() {
               prose-li:text-lg prose-li:tracking-wider prose-li:text-zinc-700 dark:prose-li:text-zinc-300"
           >
             <span 
-              className="text-lg leading-9 tracking-[0.04em] text-zinc-700 dark:text-zinc-300
+              className="text-lg leading-9 tracking-[0.04em] text-zinc-900 dark:text-zinc-300
                 font-montserrat block space-y-6 [&>p]:mb-6 
                 [&>p]:leading-relaxed [&>p]:tracking-wide
                 [&>*]:tracking-wide [&>*]:leading-relaxed"

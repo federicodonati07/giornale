@@ -53,7 +53,7 @@ export default function ManageArticlesPage() {
     { value: 'SPORT', label: 'SPORT' },
     { value: 'AVIAZIONE', label: 'AVIAZIONE' },
     { value: 'SCIENZE', label: 'SCIENZE' },
-    { value: 'MODA', label: 'MODA' },
+    { value: 'MEDICINA', label: 'MEDICINA' },
     { value: 'NATURA', label: 'NATURA' },
     { value: 'ITALIA', label: 'ITALIA' }
   ])
@@ -64,12 +64,18 @@ export default function ManageArticlesPage() {
   // Verifica se l'utente è autorizzato
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user && user.email === "realeaquila.929@gmail.com") {
+      const adminEmails = [
+        process.env.NEXT_PUBLIC_ADMIN_EMAIL_1,
+        process.env.NEXT_PUBLIC_ADMIN_EMAIL_2,
+        process.env.NEXT_PUBLIC_ADMIN_EMAIL_3,
+        process.env.NEXT_PUBLIC_ADMIN_EMAIL_4
+      ]
+      
+      if (user && adminEmails.includes(user.email || '')) {
         setIsAdmin(true)
         fetchArticles()
       } else {
-        // Reindirizza alla home se non è l'admin
-        router.push("/")
+        router.push('/')
       }
       setLoading(false)
     })

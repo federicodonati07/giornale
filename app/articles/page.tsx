@@ -29,7 +29,7 @@ const topics = [
   "SPORT",
   "AVIAZIONE",
   "SCIENZE",
-  "MODA",
+  "MEDICINA",
   "NATURA",
   "ITALIA"
 ]
