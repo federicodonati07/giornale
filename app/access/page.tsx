@@ -191,10 +191,10 @@ export default function AccessPage() {
   };
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-zinc-100 to-zinc-200/90 dark:from-zinc-900 dark:to-zinc-800 flex flex-col items-center justify-center p-4">
+    <main className="min-h-screen bg-gradient-to-br from-zinc-900 to-zinc-800 flex flex-col items-center justify-center p-4">
       {/* Logo/Branding */}
       <div className="absolute top-4 left-4 sm:top-6 sm:left-8">
-        <Link href="/" className="flex items-center text-zinc-800 dark:text-zinc-200 hover:opacity-80 transition-opacity">
+        <Link href="/" className="flex items-center text-zinc-200 hover:opacity-80 transition-opacity">
           <FiArrowLeft className="mr-2 h-5 w-5" />
           <span className="font-serif text-lg">GIORNALE</span>
         </Link>
@@ -223,16 +223,16 @@ export default function AccessPage() {
       {/* Main Content */}
       <div className="w-full max-w-md z-10">
         <div className="text-center mb-8">
-          <h1 className="font-serif text-4xl sm:text-5xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+          <h1 className="font-serif text-4xl sm:text-5xl font-bold tracking-tight text-zinc-200">
             {isRegistering ? "Registrati" : "Accedi"}
           </h1>
-          <p className="mt-3 text-zinc-600 dark:text-zinc-300 text-sm sm:text-base">
+          <p className="mt-3 text-zinc-300 text-sm sm:text-base">
             {isRegistering ? "Crea un account per accedere a contenuti esclusivi" : "Accedi al tuo account per leggere contenuti esclusivi"}
           </p>
         </div>
         
         {/* Auth Form */}
-        <div className="max-w-md w-full mx-auto p-8 backdrop-blur-xl bg-white/15 dark:bg-zinc-800/20 border border-white/30 dark:border-white/10 rounded-2xl shadow-2xl transition-all duration-500 hover:shadow-[0_20px_60px_-15px_rgba(0,0,0,0.3)] dark:hover:shadow-[0_20px_60px_-15px_rgba(255,255,255,0.1)]">
+        <div className="max-w-md w-full mx-auto p-8 backdrop-blur-xl bg-zinc-800/20 border border-zinc-700 rounded-2xl shadow-2xl transition-all duration-500 hover:shadow-[0_20px_60px_-15px_rgba(0,0,0,0.3)]">
           {errorMessage && (
             <div className="mb-6 p-4 bg-red-500/10 backdrop-blur-sm border border-red-500/30 rounded-xl text-red-500 text-sm animate-fade-in">
               <div className="flex items-center">
@@ -252,7 +252,7 @@ export default function AccessPage() {
                 placeholder="Email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full pl-10 p-4 bg-white/5 border border-white/20 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
+                className="w-full pl-10 p-4 bg-zinc-800/10 border border-zinc-700 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 text-zinc-200 outline-none"
               />
             </div>
             
@@ -265,21 +265,21 @@ export default function AccessPage() {
                 placeholder="Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-10 pr-10 p-4 bg-white/5 border border-white/20 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
+                className="w-full pl-10 pr-10 p-4 bg-zinc-800/10 border border-zinc-700 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 text-zinc-200 outline-none"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute inset-y-0 right-0 flex items-center pr-3 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors duration-300"
+                className="absolute inset-y-0 right-0 flex items-center pr-3 text-zinc-500 hover:text-zinc-300 transition-colors duration-300"
               >
                 {showPassword ? <FiEyeOff className="h-5 w-5" /> : <FiEye className="h-5 w-5" />}
               </button>
             </div>
             
             {isRegistering && password.length > 0 && (
-              <div className="space-y-2 p-4 bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl transition-all duration-500">
+              <div className="space-y-2 p-4 bg-zinc-800/10 backdrop-blur-sm border border-zinc-700 rounded-xl transition-all duration-500">
                 <div className="flex justify-between items-center">
-                  <div className="h-2 flex-grow rounded-full bg-zinc-200 dark:bg-zinc-700 overflow-hidden">
+                  <div className="h-2 flex-grow rounded-full bg-zinc-700 overflow-hidden">
                     <div 
                       className={`h-full ${getStrengthColor()} transition-all duration-500`} 
                       style={{ width: `${passwordStrength}%` }}
@@ -314,12 +314,12 @@ export default function AccessPage() {
                   placeholder="Conferma Password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className={`w-full pl-10 p-4 bg-white/5 border rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none ${
+                  className={`w-full pl-10 p-4 bg-zinc-800/10 border rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 text-zinc-200 outline-none ${
                     confirmPassword && password !== confirmPassword 
                       ? "border-red-500" 
                       : confirmPassword 
                         ? "border-green-500" 
-                        : "border-white/20"
+                        : "border-zinc-700"
                   }`}
                 />
                 {confirmPassword && (
@@ -353,17 +353,17 @@ export default function AccessPage() {
             
             <div className="relative my-6">
               <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-white/10"></div>
+                <div className="w-full border-t border-zinc-700"></div>
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className="px-3 py-1 bg-white/5 backdrop-blur-sm text-zinc-500 rounded-full">oppure</span>
+                <span className="px-3 py-1 bg-zinc-800/10 backdrop-blur-sm text-zinc-500 rounded-full">oppure</span>
               </div>
             </div>
             
             <div className="grid grid-cols-2 gap-4">
               <Button
                 variant="ghost"
-                className={`py-3 bg-white/10 dark:bg-zinc-700/30 backdrop-blur-sm text-zinc-800 dark:text-zinc-100 border border-white/20 rounded-xl shadow-md transition-all duration-300 hover:shadow-lg hover:bg-white/20 dark:hover:bg-zinc-700/60 hover:scale-[1.02] hover:border-white/30 ${
+                className={`py-3 bg-zinc-800/30 backdrop-blur-sm text-zinc-200 border border-zinc-700 rounded-xl shadow-md transition-all duration-300 hover:shadow-lg hover:bg-zinc-700/60 hover:scale-[1.02] hover:border-zinc-700/60 ${
                   isLoading ? "opacity-70 pointer-events-none" : ""
                 }`}
                 onClick={() => handleOAuthLogin("google")}
@@ -376,7 +376,7 @@ export default function AccessPage() {
               </Button>
               <Button
                 variant="ghost"
-                className={`py-3 bg-zinc-800/40 backdrop-blur-sm text-white border border-white/10 rounded-xl shadow-md transition-all duration-300 hover:shadow-lg hover:bg-zinc-800/60 hover:scale-[1.02] hover:border-white/20 ${
+                className={`py-3 bg-zinc-800/40 backdrop-blur-sm text-zinc-200 border border-zinc-700 rounded-xl shadow-md transition-all duration-300 hover:shadow-lg hover:bg-zinc-700/60 hover:scale-[1.02] hover:border-zinc-700/60 ${
                   isLoading ? "opacity-70 pointer-events-none" : ""
                 }`}
                 onClick={() => handleOAuthLogin("github")}
@@ -391,7 +391,7 @@ export default function AccessPage() {
           </div>
           
           <div className="mt-8 text-center">
-            <p className="text-sm text-zinc-600 dark:text-zinc-300">
+            <p className="text-sm text-zinc-300">
               {isRegistering ? "Hai già un account?" : "Non hai un account?"}{" "}
               <span
                 className="text-blue-500 cursor-pointer hover:underline font-medium transition-all duration-300 hover:text-blue-400"
@@ -408,8 +408,8 @@ export default function AccessPage() {
           </div>
         </div>
         
-        <div className="mt-8 text-center text-xs text-zinc-500 dark:text-zinc-400">
-          <p>Accedendo, accetti i nostri <span className="underline cursor-pointer hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors duration-300">Termini di Servizio</span> e la <span className="underline cursor-pointer hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors duration-300">Privacy Policy</span></p>
+        <div className="mt-8 text-center text-xs text-zinc-500">
+          <p>Accedendo, accetti i nostri <span className="underline cursor-pointer hover:text-zinc-600 transition-colors duration-300">Termini di Servizio</span> e la <span className="underline cursor-pointer hover:text-zinc-600 transition-colors duration-300">Privacy Policy</span></p>
         </div>
       </div>
     </main>

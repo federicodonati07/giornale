@@ -58,6 +58,8 @@ export default function ManageArticlesPage() {
     { value: 'ITALIA', label: 'ITALIA' }
   ])
   const [newLink, setNewLink] = useState({ url: '', label: '' })
+  const [newNote, setNewNote] = useState({ text: '', content: '' })
+  const [notes, setNotes] = useState<Array<{ text: string, content: string }>>([])
 
   // Verifica se l'utente è autorizzato
   useEffect(() => {
@@ -286,6 +288,17 @@ export default function ManageArticlesPage() {
     setNewLink({ url: '', label: '' })
   }
 
+  // Funzione per aggiungere una nuova nota
+  const handleAddNote = () => {
+    if (!newNote.text || !newNote.content) {
+      showNotification('error', 'Inserisci sia il testo che il contenuto della nota')
+      return
+    }
+
+    setNotes([...notes, newNote])
+    setNewNote({ text: '', content: '' })
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-zinc-100 to-zinc-200/90 dark:from-zinc-900 dark:to-zinc-800">
@@ -468,6 +481,59 @@ export default function ManageArticlesPage() {
                   </div>
                 </div>
 
+                {/* Note aggiuntive */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+                    Note aggiuntive
+                  </label>
+                  
+                  {/* Form per aggiungere note */}
+                  <div className="flex gap-3 mb-4">
+                    <input
+                      type="text"
+                      placeholder="Testo della nota"
+                      value={newNote.text}
+                      onChange={(e) => setNewNote({ ...newNote, text: e.target.value })}
+                      className="flex-1 p-3 bg-white/5 border border-white/20 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Contenuto della nota"
+                      value={newNote.content}
+                      onChange={(e) => setNewNote({ ...newNote, content: e.target.value })}
+                      className="flex-1 p-3 bg-white/5 border border-white/20 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
+                    />
+                    <button
+                      onClick={handleAddNote}
+                      className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl transition-colors duration-200"
+                    >
+                      Aggiungi Nota
+                    </button>
+                  </div>
+
+                  {/* Lista delle note */}
+                  <div className="space-y-4">
+                    {notes.map((note, index) => (
+                      <div key={index} className="flex items-center justify-between gap-2 bg-amber-500/10 text-amber-600 dark:text-amber-400 px-4 py-2 rounded-xl">
+                        <div className="flex flex-col">
+                          <span className="font-medium">{note.text}</span>
+                          <span className="text-sm opacity-75">{note.content}</span>
+                        </div>
+                        <button
+                          onClick={() => {
+                            const newNotes = [...notes];
+                            newNotes.splice(index, 1);
+                            setNotes(newNotes);
+                          }}
+                          className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300"
+                        >
+                          <FiX className="h-5 w-5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
                 {/* Editor del contenuto */}
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
@@ -482,6 +548,16 @@ export default function ManageArticlesPage() {
                       transition-all duration-300 text-zinc-900 dark:text-zinc-50 
                       outline-none font-montserrat resize-y"
                   />
+                  <div className="mt-4">
+                    {notes.map((note, index) => (
+                      <span key={index} className="relative group">
+                        <span className="underline cursor-pointer">{note.text}</span>
+                        <div className="absolute left-0 mt-1 w-64 p-2 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                          {note.content}
+                        </div>
+                      </span>
+                    ))}
+                  </div>
                 </div>
 
                 {/* Link aggiuntivi */}
