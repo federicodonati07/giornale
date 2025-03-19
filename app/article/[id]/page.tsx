@@ -262,7 +262,7 @@ export default function Article() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-zinc-900 to-zinc-800 flex items-center justify-center">
-        <div className="animate-pulse text-zinc-400">
+        <div className="animate-pulse text-zinc-200">
           Caricamento...
         </div>
       </div>
@@ -278,7 +278,7 @@ export default function Article() {
           <div className="mb-8">
             <Link 
               href="/articles"
-              className="inline-flex items-center text-sm text-zinc-400 hover:text-amber-500 transition-colors duration-300 mb-4"
+              className="inline-flex items-center text-sm text-zinc-200 hover:text-amber-500 transition-colors duration-300 mb-4"
             >
               <FiArrowLeft className="mr-2 h-4 w-4" />
               Torna agli articoli
@@ -305,7 +305,7 @@ export default function Article() {
                 <h2 className="text-2xl font-bold text-zinc-50 mb-4">
                   Contenuto riservato
                 </h2>
-                <p className="text-zinc-400 mb-6">
+                <p className="text-zinc-200 mb-6">
                   Effettua l&apos;accesso per leggere l&apos;articolo
                 </p>
                 <Link
@@ -325,7 +325,7 @@ export default function Article() {
   if (!article) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-zinc-900 to-zinc-800 flex items-center justify-center">
-        <div className="text-zinc-400">
+        <div className="text-zinc-200">
           Articolo non trovato
         </div>
       </div>
@@ -364,7 +364,7 @@ export default function Article() {
     <main className="min-h-screen bg-gradient-to-br from-zinc-900 to-zinc-800">
       {/* Toast message */}
       {actionMessage && (
-        <div className="fixed top-4 right-4 z-50 px-4 py-2 bg-zinc-800 dark:bg-zinc-700 text-white rounded-lg shadow-lg transition-opacity duration-300">
+        <div className="fixed top-4 right-4 z-50 px-4 py-2 bg-zinc-700 text-white rounded-lg shadow-lg transition-opacity duration-300">
           {actionMessage}
         </div>
       )}
@@ -374,7 +374,7 @@ export default function Article() {
         <div className="mb-8">
           <Link 
             href="/articles"
-            className="inline-flex items-center text-sm text-zinc-600 dark:text-zinc-400 hover:text-amber-500 dark:hover:text-amber-400 transition-colors duration-300 mb-4"
+            className="inline-flex items-center text-sm text-zinc-400 hover:text-amber-400 transition-colors duration-300 mb-4"
           >
             <FiArrowLeft className="mr-2 h-4 w-4" />
             Torna agli articoli
@@ -397,7 +397,7 @@ export default function Article() {
 
         {/* Contenuto articolo */}
         <article className="max-w-4xl mx-auto">
-          <h1 className="font-serif text-3xl sm:text-4xl md:text-5xl font-bold text-zinc-900 dark:text-zinc-50 mb-6 text-center">
+          <h1 className="font-serif text-3xl sm:text-4xl md:text-5xl font-bold text-zinc-50 mb-6 text-center">
             {article.titolo}
           </h1>
 
@@ -405,20 +405,20 @@ export default function Article() {
           <div className="flex flex-wrap items-center justify-between gap-4 mb-8 text-sm">
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-2">
-                <span className="font-medium text-zinc-900 dark:text-zinc-50">Autore:</span>
-                <span className="text-zinc-600 dark:text-zinc-400">{article.autore}</span>
+                <span className="font-medium text-zinc-50">Autore:</span>
+                <span className="text-zinc-400">{article.autore}</span>
               </div>
               {article.partecipanti && (
                 <div className="flex items-center gap-2">
-                  <span className="font-medium text-zinc-900 dark:text-zinc-50">Partecipanti:</span>
-                  <span className="text-zinc-600 dark:text-zinc-400">
+                  <span className="font-medium text-zinc-50">Partecipanti:</span>
+                  <span className="text-zinc-400">
                     {Array.isArray(article.partecipanti) 
                       ? article.partecipanti.join(', ')
                       : article.partecipanti}
                   </span>
                 </div>
               )}
-              <span className="flex items-center text-zinc-600 dark:text-zinc-400">
+              <span className="flex items-center text-zinc-400">
                 <FiClock className="mr-1 h-4 w-4" />
                 {getTimeAgo(article.creazione)}
               </span>
@@ -465,6 +465,12 @@ export default function Article() {
               [&_.note-text]:items-center
               [&_.note-text]:gap-0.5
               [&_.note-text]:group
+              [&_mark]:bg-amber-500/30
+              [&_mark]:!text-black
+              [&_mark]:font-medium
+              [&_mark]:px-1
+              [&_mark]:py-0.5
+              [&_mark]:rounded-sm
               [&_.note-icon]:text-amber-500/70
               [&_.note-icon]:h-3.5
               [&_.note-icon]:w-3.5
@@ -499,17 +505,17 @@ export default function Article() {
 
           {/* Note secondarie */}
           {article.secondaryNotes && article.secondaryNotes.length > 0 && (
-            <div className="border-t border-zinc-200 dark:border-zinc-700 pt-6 mt-8">
-              <h3 className="text-sm font-medium text-zinc-500 dark:text-zinc-400 mb-4">
+            <div className="border-t border-zinc-700 pt-6 mt-8">
+              <h3 className="text-sm font-medium text-zinc-400 mb-4">
                 Note
               </h3>
               <div className="space-y-3">
                 {article.secondaryNotes.map((note, index) => (
                   <div key={note.id} className="flex items-start gap-2 text-xs font-montserrat">
-                    <span className="font-medium text-amber-600 dark:text-amber-400 flex-shrink-0">
+                    <span className="font-medium text-amber-400 flex-shrink-0">
                       [{index + 1}]
                     </span>
-                    <p className="text-zinc-600 dark:text-zinc-400 tracking-wide leading-relaxed">
+                    <p className="text-zinc-400 tracking-wide leading-relaxed">
                       {note.content}
                     </p>
                   </div>
@@ -520,8 +526,8 @@ export default function Article() {
 
           {/* Link aggiuntivi con design minimal */}
           {article.additionalLinks && article.additionalLinks.length > 0 && (
-            <div className="border-t border-zinc-200 dark:border-zinc-700 pt-6 mt-8">
-              <h3 className="text-sm font-medium text-zinc-500 dark:text-zinc-400 mb-4">
+            <div className="border-t border-zinc-700 pt-6 mt-8">
+              <h3 className="text-sm font-medium text-zinc-400 mb-4">
                 Link correlati
               </h3>
               <div className="flex flex-wrap gap-3">
@@ -531,10 +537,9 @@ export default function Article() {
                     href={link.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-sm text-amber-500 hover:text-amber-600 
-                      dark:text-amber-400 dark:hover:text-amber-300 transition-colors duration-200"
+                    className=" inline-flex items-center gap-1.5 text-amber-400 hover:text-amber-300 transition-colors duration-200"
                   >
-                    <span>{link.label}</span>
+                    <span className="font-montserrat text-lg">{link.label}</span>
                     <svg 
                       className="h-3.5 w-3.5 opacity-70" 
                       fill="none" 
@@ -555,18 +560,18 @@ export default function Article() {
           )}
 
           {/* Footer con info e metriche ripetute */}
-          <div className="border-t border-zinc-200 dark:border-zinc-700 pt-8">
+          <div className="border-t border-zinc-700 pt-8">
             <div className="flex flex-wrap items-center justify-between gap-4 text-sm">
               <div className="flex flex-col gap-4">
                 <div>
-                  <span className="font-medium text-zinc-900 dark:text-zinc-50 block mb-1">Autore</span>
-                  <span className="text-zinc-600 dark:text-zinc-400">{article.autore}</span>
+                  <span className="font-medium text-zinc-50 block mb-1">Autore</span>
+                  <span className="text-zinc-400">{article.autore}</span>
                 </div>
                 
                 {article.partecipanti && (
                   <div>
-                    <span className="font-medium text-zinc-900 dark:text-zinc-50 block mb-1">Partecipanti</span>
-                    <span className="text-zinc-600 dark:text-zinc-400">
+                    <span className="font-medium text-zinc-50 block mb-1">Partecipanti</span>
+                    <span className="text-zinc-400">
                       {Array.isArray(article.partecipanti) 
                         ? article.partecipanti.join(', ')
                         : article.partecipanti}
@@ -574,7 +579,7 @@ export default function Article() {
                   </div>
                 )}
                 
-                <span className="flex items-center text-zinc-600 dark:text-zinc-400">
+                <span className="flex items-center text-zinc-400">
                   <FiClock className="mr-1 h-4 w-4" />
                   {getTimeAgo(article.creazione)}
                 </span>
@@ -610,7 +615,7 @@ export default function Article() {
             <div className="flex justify-center mt-10">
               <button
                 onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-                className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-full transition-colors duration-300"
+                className="cursor-pointerflex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-full transition-colors duration-300"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />

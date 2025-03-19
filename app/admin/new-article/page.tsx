@@ -333,8 +333,8 @@ export default function NewArticlePage() {
     if (format === 'highlight') {
       // Caso speciale per l'evidenziazione
       const currentColor = document.queryCommandValue('backColor');
-      const isHighlighted = currentColor === 'rgb(251, 146, 60)';
-      document.execCommand('backColor', false, isHighlighted ? 'inherit' : '#fb923c');
+      const isHighlighted = currentColor === 'rgb(179, 89, 16)';
+      document.execCommand('backColor', false, isHighlighted ? 'inherit' : '#b35910');
       setActiveFormats(prev => ({
         ...prev,
         highlight: !isHighlighted
