@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
@@ -10,6 +10,7 @@ import { ref, get, remove } from "firebase/database"
 import { onAuthStateChanged } from "firebase/auth"
 import { FirebaseError } from "firebase/app"
 import { auth, db, app } from "../../firebase"
+import { motion, useScroll, useTransform } from "framer-motion"
 
 interface ArticleData {
   uuid: string
@@ -39,6 +40,28 @@ export default function ManageArticlesPage() {
   const [sortBy, setSortBy] = useState<keyof ArticleData>('creazione')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
   const [searchTerm, setSearchTerm] = useState('')
+
+  // Add scroll tracking for parallax effects
+  const { scrollY } = useScroll()
+  const containerRef = useRef<HTMLDivElement>(null)
+  
+  // Define all transform values at the top level
+  const headerY = useTransform(scrollY, [0, 300], [0, -50])
+  const headerOpacity = useTransform(scrollY, [0, 100], [1, 0.8])
+  const bgElement1Y = useTransform(scrollY, [0, 500], [0, -150])
+  const bgElement2Y = useTransform(scrollY, [0, 500], [0, 100])
+  const tableShadow = useTransform(scrollY, [0, 200], [0, 20])
+  const tableBoxShadow = useTransform(
+    tableShadow, 
+    value => `0 ${value}px ${value * 3}px -15px rgba(0,0,0,0.3), 0 ${value/2}px ${value}px -${value/2}px rgba(255,255,255,0.1)`
+  )
+  
+  // Enhance with additional transform values
+  const titleScale = useTransform(scrollY, [0, 200], [1, 0.92])
+  const titleY = useTransform(scrollY, [0, 200], [0, -10])
+  const searchBarY = useTransform(scrollY, [0, 200], [0, -5])
+  const tableOpacity = useTransform(scrollY, [0, 100], [0.95, 1])
+  const tableY = useTransform(scrollY, [0, 100], [15, 0])
 
   // Verifica se l'utente è autorizzato
   useEffect(() => {
@@ -203,7 +226,26 @@ export default function ManageArticlesPage() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-zinc-100 to-zinc-200/90 dark:from-zinc-900 dark:to-zinc-800">
-        <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+        <motion.div
+          animate={{ 
+            scale: [1, 1.2, 1],
+            rotate: [0, 180, 360],
+            borderRadius: ["20%", "50%", "20%"]
+          }}
+          transition={{ 
+            duration: 2,
+            repeat: Infinity,
+            repeatType: "loop",
+            ease: "easeInOut"
+          }}
+          className="w-16 h-16 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center"
+        >
+          <motion.div
+            animate={{ opacity: [1, 0.4, 1] }}
+            transition={{ duration: 1.5, repeat: Infinity }}
+            className="w-8 h-8 bg-white rounded-full"
+          />
+        </motion.div>
       </div>
     )
   }
@@ -213,28 +255,125 @@ export default function ManageArticlesPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-zinc-100 to-zinc-200/90 dark:from-zinc-900 dark:to-zinc-800 py-12 px-4 sm:px-6">
-      {/* Navigazione */}
-      <div className="max-w-7xl mx-auto mb-8">
-        <Link href="/" className="inline-flex items-center text-zinc-800 dark:text-zinc-200 hover:opacity-80 transition-opacity">
-          <FiArrowLeft className="mr-2 h-5 w-5" />
-          <span className="font-serif text-lg">Torna alla home</span>
-        </Link>
-      </div>
+    <motion.main 
+      ref={containerRef}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.6 }}
+      className="min-h-screen bg-gradient-to-br from-zinc-100 to-zinc-200/90 dark:from-zinc-900 dark:to-zinc-800 py-12 px-4 sm:px-6 overflow-hidden"
+    >
+      {/* Enhanced background elements with more complex animations */}
+      <motion.div 
+        className="fixed inset-0 pointer-events-none"
+        style={{ opacity: 0.07 }}
+      >
+        <motion.div 
+          initial={{ x: 0, y: 0 }}
+          animate={{ 
+            x: [0, 20, 0, -20, 0],
+            y: [0, -20, 0, 20, 0]
+          }}
+          transition={{ 
+            duration: 20, 
+            repeat: Infinity,
+            repeatType: "mirror", 
+            ease: "easeInOut" 
+          }}
+          style={{ y: bgElement1Y }}
+          className="absolute -top-[20%] -right-[10%] h-[70vh] w-[70vh] rounded-full bg-gradient-to-br from-blue-400 to-indigo-600 blur-3xl"
+        />
+        <motion.div 
+          initial={{ x: 0, y: 0 }}
+          animate={{ 
+            x: [0, -20, 0, 20, 0],
+            y: [0, 20, 0, -20, 0]
+          }}
+          transition={{ 
+            duration: 25, 
+            repeat: Infinity,
+            repeatType: "mirror", 
+            ease: "easeInOut" 
+          }}
+          style={{ y: bgElement2Y }}
+          className="absolute -bottom-[20%] -left-[10%] h-[70vh] w-[70vh] rounded-full bg-gradient-to-tr from-emerald-400 to-blue-600 blur-3xl dark:opacity-40"
+        />
+        
+        {/* Add floating accent elements */}
+        <motion.div
+          initial={{ opacity: 0.5 }}
+          animate={{ 
+            y: [0, -30, 0],
+            opacity: [0.4, 0.2, 0.4],
+            scale: [1, 1.1, 1]
+          }}
+          transition={{ 
+            duration: 8, 
+            repeat: Infinity,
+            repeatType: "reverse"
+          }}
+          className="absolute top-[30%] right-[20%] h-32 w-32 rounded-full bg-amber-500/30 blur-2xl"
+        />
+        <motion.div
+          initial={{ opacity: 0.5 }}
+          animate={{ 
+            y: [0, 40, 0],
+            opacity: [0.3, 0.5, 0.3],
+            scale: [1, 0.9, 1]
+          }}
+          transition={{ 
+            duration: 12, 
+            repeat: Infinity,
+            repeatType: "reverse",
+            delay: 1
+          }}
+          className="absolute bottom-[40%] left-[15%] h-40 w-40 rounded-full bg-blue-500/20 blur-2xl"
+        />
+      </motion.div>
       
-      {/* Notifica */}
+      {/* Navigation with parallax fade */}
+      <motion.div 
+        className="max-w-7xl mx-auto mb-8"
+        style={{ y: headerY, opacity: headerOpacity }}
+      >
+        <motion.div
+          initial={{ x: -30, opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          transition={{ duration: 0.6 }}
+          whileHover={{ x: -5 }}
+        >
+          <Link href="/" className="inline-flex items-center text-zinc-800 dark:text-zinc-200 hover:opacity-80 transition-opacity">
+            <FiArrowLeft className="mr-2 h-5 w-5" />
+            <span className="font-serif text-lg">Torna alla home</span>
+          </Link>
+        </motion.div>
+      </motion.div>
+      
+      {/* Notification with animation */}
       {notification && (
-        <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg transition-all transform animate-fade-in ${
-          notification.type === 'success' ? 'bg-green-500/90' : 'bg-red-500/90'
-        }`}>
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg ${
+            notification.type === 'success' ? 'bg-green-500/90' : 'bg-red-500/90'
+          }`}
+        >
           <p className="text-white">{notification.message}</p>
-        </div>
+        </motion.div>
       )}
       
-      {/* Popup di conferma eliminazione */}
+      {/* Popup with animation */}
       {deleteConfirm && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-zinc-800 rounded-2xl shadow-2xl w-full max-w-md p-6">
+        <motion.div 
+          initial={{ opacity: 0, backdropFilter: "blur(0px)" }}
+          animate={{ opacity: 1, backdropFilter: "blur(5px)" }}
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+        >
+          <motion.div
+            initial={{ scale: 0.9, y: 20 }}
+            animate={{ scale: 1, y: 0 }}
+            className="bg-white dark:bg-zinc-800 rounded-2xl shadow-2xl w-full max-w-md p-6"
+          >
             <div className="text-center mb-6">
               <div className="mx-auto w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mb-4">
                 <FiAlertCircle className="h-6 w-6 text-red-600 dark:text-red-400" />
@@ -261,26 +400,50 @@ export default function ManageArticlesPage() {
                 Elimina
               </button>
             </div>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
       
-      {/* Contenuto principale */}
-      <div className="max-w-7xl mx-auto">
-        <div className="text-center mb-10">
-          <h1 className="font-serif text-4xl sm:text-5xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+      {/* Main content with enhanced parallax effects */}
+      <div className="max-w-7xl mx-auto relative z-10">
+        <motion.div 
+          className="text-center mb-10"
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8 }}
+          style={{ y: titleY }}
+        >
+          <motion.h1 
+            className="font-serif text-4xl sm:text-5xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50"
+            initial={{ scale: 0.95 }}
+            animate={{ scale: 1 }}
+            style={{ scale: titleScale }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+          >
             Gestione Articoli
-          </h1>
-          <p className="mt-3 text-zinc-600 dark:text-zinc-300 text-sm sm:text-base">
+          </motion.h1>
+          <motion.p 
+            className="mt-3 text-zinc-600 dark:text-zinc-300 text-sm sm:text-base"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.5, delay: 0.4 }}
+          >
             Visualizza, modifica ed elimina gli articoli pubblicati
-          </p>
-        </div>
+          </motion.p>
+        </motion.div>
         
-        {/* Barra di ricerca e filtri */}
-        <div className="backdrop-blur-xl bg-white/15 dark:bg-zinc-800/20 border border-white/30 dark:border-white/10 rounded-2xl shadow-xl p-4 mb-6">
+        {/* Search bar with animation */}
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.6 }}
+          style={{ y: searchBarY }}
+          className="backdrop-blur-xl bg-white/15 dark:bg-zinc-800/20 border border-white/30 dark:border-white/10 rounded-2xl shadow-xl p-4 mb-6"
+        >
           <div className="flex flex-col sm:flex-row gap-4 items-center">
             <div className="w-full">
-              <input
+              <motion.input
+                whileFocus={{ scale: 1.02, boxShadow: "0 0 0 2px rgba(59, 130, 246, 0.5)" }}
                 type="text"
                 placeholder="Cerca articoli..."
                 value={searchTerm}
@@ -289,10 +452,20 @@ export default function ManageArticlesPage() {
               />
             </div>
           </div>
-        </div>
+        </motion.div>
         
-        {/* Tabella articoli */}
-        <div className="backdrop-blur-xl bg-white/15 dark:bg-zinc-800/20 border border-white/30 dark:border-white/10 rounded-2xl shadow-2xl p-4 overflow-x-auto transition-all duration-500 hover:shadow-[0_20px_60px_-15px_rgba(0,0,0,0.3)] dark:hover:shadow-[0_20px_60px_-15px_rgba(255,255,255,0.1)]">
+        {/* Table with enhanced parallax shadow effect */}
+        <motion.div 
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.7, delay: 0.8 }}
+          style={{ 
+            boxShadow: tableBoxShadow,
+            y: tableY,
+            opacity: tableOpacity
+          }}
+          className="backdrop-blur-xl bg-white/15 dark:bg-zinc-800/20 border border-white/30 dark:border-white/10 rounded-2xl p-4 overflow-x-auto transition-all duration-500"
+        >
           {filteredArticles.length > 0 ? (
             <table className="w-full border-collapse">
               <thead>
@@ -302,7 +475,9 @@ export default function ManageArticlesPage() {
                     className="p-3 text-left text-sm font-medium text-zinc-600 dark:text-zinc-400 cursor-pointer hover:text-blue-500 dark:hover:text-blue-400"
                     onClick={() => handleSort('titolo')}
                   >
-                    Titolo {sortBy === 'titolo' && (sortDirection === 'asc' ? '↑' : '↓')}
+                    <motion.div whileHover={{ x: 3 }} className="inline-flex items-center">
+                      Titolo {sortBy === 'titolo' && (sortDirection === 'asc' ? '↑' : '↓')}
+                    </motion.div>
                   </th>
                   <th 
                     className="p-3 text-left text-sm font-medium text-zinc-600 dark:text-zinc-400 cursor-pointer hover:text-blue-500 dark:hover:text-blue-400"
@@ -322,10 +497,21 @@ export default function ManageArticlesPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredArticles.map((article) => (
-                  <tr 
+                {filteredArticles.map((article, index) => (
+                  <motion.tr 
                     key={article.uuid} 
                     className="border-b border-white/10 hover:bg-white/5 dark:hover:bg-zinc-800/40 transition-colors duration-200"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ 
+                      duration: 0.4, 
+                      delay: 0.9 + (index * 0.05),
+                      ease: "easeOut"
+                    }}
+                    whileHover={{ 
+                      backgroundColor: "rgba(255, 255, 255, 0.07)",
+                      transition: { duration: 0.1 } 
+                    }}
                   >
                     {/* Immagine */}
                     <td className="p-3 w-16">
@@ -418,21 +604,38 @@ export default function ManageArticlesPage() {
                         )}
                       </div>
                     </td>
-                  </tr>
+                  </motion.tr>
                 ))}
               </tbody>
             </table>
           ) : (
-            <div className="py-12 text-center">
-              <FiAlertCircle className="mx-auto h-12 w-12 text-zinc-400 dark:text-zinc-500 mb-4" />
+            <motion.div 
+              className="py-12 text-center"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.5 }}
+            >
+              <motion.div 
+                animate={{ 
+                  y: [0, -10, 0],
+                  opacity: [0.7, 1, 0.7]
+                }}
+                transition={{ 
+                  duration: 3, 
+                  repeat: Infinity,
+                  repeatType: "reverse" 
+                }}
+              >
+                <FiAlertCircle className="mx-auto h-12 w-12 text-zinc-400 dark:text-zinc-500 mb-4" />
+              </motion.div>
               <h3 className="text-lg font-medium text-zinc-700 dark:text-zinc-300">Nessun articolo trovato</h3>
               <p className="mt-2 text-zinc-500 dark:text-zinc-400">
                 {searchTerm ? 'Prova a modificare i criteri di ricerca' : 'Non ci sono articoli pubblicati'}
               </p>
-            </div>
+            </motion.div>
           )}
-        </div>
+        </motion.div>
       </div>
-    </main>
+    </motion.main>
   )
 } 

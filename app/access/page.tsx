@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { FiArrowLeft, FiMail, FiLock, FiGithub, FiUser, FiCheck, FiX, FiEye, FiEyeOff } from "react-icons/fi"
@@ -9,6 +9,7 @@ import { Button } from "@heroui/react"
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, GithubAuthProvider, onAuthStateChanged } from "firebase/auth"
 import { FirebaseError } from "firebase/app"
 import { auth } from "../firebase"
+import { motion, useScroll, useTransform } from "framer-motion"
 
 type NotificationType = "success" | "error" | "info" | null;
 
@@ -59,6 +60,17 @@ export default function AccessPage() {
   const [notification, setNotification] = useState<Notification | null>(null)
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+
+  // Refs per gli elementi con effetti parallax
+  const headerRef = useRef<HTMLDivElement>(null)
+  const formRef = useRef<HTMLDivElement>(null)
+  
+  // Setup per gli effetti di scrolling
+  const { scrollY } = useScroll()
+  const headerOpacity = useTransform(scrollY, [0, 100], [1, 0.6])
+  const headerScale = useTransform(scrollY, [0, 100], [1, 0.95])
+  const headerY = useTransform(scrollY, [0, 100], [0, -15])
+  const formY = useTransform(scrollY, [0, 300], [0, -30])
 
   // Controlla se l'utente è già autenticato
   useEffect(() => {
@@ -222,17 +234,29 @@ export default function AccessPage() {
       
       {/* Main Content */}
       <div className="w-full max-w-md z-10">
-        <div className="text-center mb-8">
+        <motion.div 
+          ref={headerRef}
+          className="text-center mb-8"
+          style={{ 
+            opacity: headerOpacity, 
+            scale: headerScale,
+            y: headerY 
+          }}
+        >
           <h1 className="font-serif text-4xl sm:text-5xl font-bold tracking-tight text-zinc-200">
             {isRegistering ? "Registrati" : "Accedi"}
           </h1>
           <p className="mt-3 text-zinc-300 text-sm sm:text-base">
             {isRegistering ? "Crea un account per accedere a contenuti esclusivi" : "Accedi al tuo account per leggere contenuti esclusivi"}
           </p>
-        </div>
+        </motion.div>
         
-        {/* Auth Form */}
-        <div className="max-w-md w-full mx-auto p-8 backdrop-blur-xl bg-zinc-800/20 border border-zinc-700 rounded-2xl shadow-2xl transition-all duration-500 hover:shadow-[0_20px_60px_-15px_rgba(0,0,0,0.3)]">
+        {/* Auth Form con effetto parallax */}
+        <motion.div 
+          ref={formRef}
+          style={{ y: formY }}
+          className="max-w-md w-full mx-auto p-8 backdrop-blur-xl bg-zinc-800/20 border border-zinc-700 rounded-2xl shadow-2xl transition-all duration-500 hover:shadow-[0_20px_60px_-15px_rgba(0,0,0,0.3)]"
+        >
           {errorMessage && (
             <div className="mb-6 p-4 bg-red-500/10 backdrop-blur-sm border border-red-500/30 rounded-xl text-red-500 text-sm animate-fade-in">
               <div className="flex items-center">
@@ -406,7 +430,7 @@ export default function AccessPage() {
               </span>
             </p>
           </div>
-        </div>
+        </motion.div>
         
         <div className="mt-8 text-center text-xs text-zinc-500">
           <p>Accedendo, accetti i nostri <span className="underline cursor-pointer hover:text-zinc-600 transition-colors duration-300">Termini di Servizio</span> e la <span className="underline cursor-pointer hover:text-zinc-600 transition-colors duration-300">Privacy Policy</span></p>

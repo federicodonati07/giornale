@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import Image from "next/image"
 import { ref, get, update, increment, remove } from "firebase/database"
 import { db, auth, app } from "../../firebase"
@@ -9,6 +9,7 @@ import { getStorage, ref as storageRef, deleteObject } from "firebase/storage"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { FirebaseError } from "firebase/app"
+import { motion, useScroll, useTransform } from "framer-motion"
 
 interface ArticleData {
   uuid: string
@@ -37,6 +38,23 @@ interface ArticleData {
 }
 
 export default function Article() {
+  // Add scroll tracking
+  const { scrollY } = useScroll()
+  const containerRef = useRef<HTMLDivElement>(null)
+  
+  // Create all transform values at the top level
+  const titleY = useTransform(scrollY, [0, 300], [0, -50])
+  const titleScale = useTransform(scrollY, [0, 200], [1, 0.95])
+  const imageScale = useTransform(scrollY, [0, 300], [1, 1.1])
+  const imageOpacity = useTransform(scrollY, [0, 300], [1, 0.8])
+  const imageY = useTransform(scrollY, [0, 300], [0, 20])
+  const headerOpacity = useTransform(scrollY, [0, 100], [1, 0])
+  const bgElement1Y = useTransform(scrollY, [0, 500], [0, -150])
+  const bgElement2Y = useTransform(scrollY, [0, 500], [0, 100])
+  const overlayOpacity = useTransform(scrollY, [0, 300], [0, 0.6])
+  const footerY = useTransform(scrollY, [0, 500], [0, -50])
+  const footerOpacity = useTransform(scrollY, [0, 500], [1, 0.8])
+  
   const params = useParams()
   const router = useRouter()
   const [article, setArticle] = useState<ArticleData | null>(null)
@@ -150,7 +168,10 @@ export default function Article() {
   }, [])
 
   const handleLike = async () => {
-    if (!user) return
+    if (!user) {
+      showMessage("Devi effettuare l'accesso per mettere un like");
+      return;
+    }
     
     try {
       const articleRef = ref(db, `articoli/${params.id}`)
@@ -312,9 +333,37 @@ export default function Article() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-zinc-900 to-zinc-800 flex items-center justify-center">
-        <div className="animate-pulse text-zinc-200">
-          Caricamento...
-        </div>
+        <motion.div 
+          className="flex flex-col items-center"
+        >
+          <motion.div
+            animate={{ 
+              scale: [1, 1.2, 1],
+              rotate: [0, 180, 360],
+              borderRadius: ["20%", "50%", "20%"]
+            }}
+            transition={{ 
+              duration: 2,
+              repeat: Infinity,
+              repeatType: "loop",
+              ease: "easeInOut"
+            }}
+            className="w-16 h-16 bg-gradient-to-br from-amber-500 to-amber-600 rounded-full mb-4 flex items-center justify-center"
+          >
+            <motion.div
+              animate={{ opacity: [1, 0.4, 1] }}
+              transition={{ duration: 1.5, repeat: Infinity }}
+              className="w-8 h-8 bg-zinc-900 rounded-full"
+            />
+          </motion.div>
+          <motion.span 
+            animate={{ opacity: [0.5, 1, 0.5] }}
+            transition={{ duration: 1.5, repeat: Infinity }}
+            className="text-zinc-200 font-medium"
+          >
+            Caricamento...
+          </motion.span>
+        </motion.div>
       </div>
     )
   }
@@ -689,12 +738,60 @@ export default function Article() {
   };
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-zinc-900 to-zinc-800">
+    <motion.main 
+      ref={containerRef}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.6 }}
+      className="min-h-screen bg-gradient-to-br from-zinc-900 to-zinc-800 overflow-hidden"
+    >
+      {/* Parallax background elements */}
+      <motion.div 
+        className="fixed inset-0 pointer-events-none"
+        style={{ opacity: 0.07 }}
+      >
+        <motion.div 
+          initial={{ x: 0, y: 0 }}
+          animate={{ 
+            x: [0, 20, 0, -20, 0],
+            y: [0, -20, 0, 20, 0]
+          }}
+          transition={{ 
+            duration: 20, 
+            repeat: Infinity,
+            repeatType: "mirror", 
+            ease: "easeInOut" 
+          }}
+          style={{ y: bgElement1Y }}
+          className="absolute -top-[10%] -right-[20%] h-[60vh] w-[60vh] rounded-full bg-gradient-to-br from-amber-500 to-orange-500 blur-3xl"
+        />
+        <motion.div 
+          initial={{ x: 0, y: 0 }}
+          animate={{ 
+            x: [0, -20, 0, 20, 0],
+            y: [0, 20, 0, -20, 0]
+          }}
+          transition={{ 
+            duration: 25, 
+            repeat: Infinity,
+            repeatType: "mirror", 
+            ease: "easeInOut" 
+          }}
+          style={{ y: bgElement2Y }}
+          className="absolute -bottom-[30%] -left-[10%] h-[80vh] w-[80vh] rounded-full bg-gradient-to-tr from-blue-500 to-purple-500 blur-3xl"
+        />
+      </motion.div>
+
       {/* Toast message */}
       {actionMessage && (
-        <div className="fixed top-4 right-4 z-50 px-4 py-2 bg-zinc-700 text-white rounded-lg shadow-lg transition-opacity duration-300">
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          className="fixed top-4 right-4 z-50 px-4 py-2 bg-zinc-700 text-white rounded-lg shadow-lg"
+        >
           {actionMessage}
-        </div>
+        </motion.div>
       )}
 
       {/* Popup di conferma azione */}
@@ -750,20 +847,34 @@ export default function Article() {
         </div>
       )}
 
-      <div className="container mx-auto px-4 py-8 sm:py-12">
-        {/* Header con navigazione */}
-        <div className="mb-8">
-          <Link 
-            href={isAdmin && article?.status === 'revision' ? "/admin/review-articles" : "/articles"}
-            className="inline-flex items-center text-sm text-zinc-400 hover:text-amber-400 transition-colors duration-300 mb-4"
+      <div className="container mx-auto px-4 py-8 sm:py-12 relative z-10">
+        {/* Header with navigation */}
+        <motion.div 
+          style={{ opacity: headerOpacity }}
+          className="mb-8"
+        >
+          <motion.div
+            initial={{ x: -30, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            transition={{ duration: 0.5 }}
           >
-            <FiArrowLeft className="mr-2 h-4 w-4" />
-            {isAdmin && article?.status === 'revision' ? "Torna a revisione articoli" : "Torna agli articoli"}
-          </Link>
+            <Link 
+              href={isAdmin && article?.status === 'revision' ? "/admin/review-articles" : "/articles"}
+              className="inline-flex items-center text-sm text-zinc-400 hover:text-amber-400 transition-colors duration-300 mb-4"
+            >
+              <FiArrowLeft className="mr-2 h-4 w-4" />
+              {isAdmin && article?.status === 'revision' ? "Torna a revisione articoli" : "Torna agli articoli"}
+            </Link>
+          </motion.div>
           
           {/* Banner di revisione */}
           {article?.status === 'revision' && (isSuperior || isAdmin) && (
-            <div className="bg-purple-500/20 border border-purple-500/30 rounded-xl p-4 mb-4 flex items-center justify-between">
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.3 }}
+              className="bg-purple-500/20 border border-purple-500/30 rounded-xl p-4 mb-4 flex items-center justify-between"
+            >
               <div className="flex items-center">
                 <div className="h-8 w-8 bg-purple-500 rounded-full flex items-center justify-center mr-3">
                   <FiEye className="h-4 w-4 text-white" />
@@ -792,38 +903,75 @@ export default function Article() {
                   </button>
                 </div>
               )}
-            </div>
+            </motion.div>
           )}
-        </div>
+        </motion.div>
 
-        {/* Immagine principale */}
-        <div className="relative w-full aspect-video max-w-4xl mx-auto mb-8 rounded-2xl overflow-hidden">
-          <Image
-            src={article.immagine}
-            alt={article.titolo}
-            fill
-            className="object-cover"
-            onError={(e) => {
-              const target = e.target as HTMLImageElement
-              target.src = '/placeholder-image.jpg'
+        {/* Main image with parallax effect */}
+        <motion.div 
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, delay: 0.2 }}
+          whileHover={{ boxShadow: "0 20px 60px -15px rgba(0,0,0,0.5)" }}
+          className="relative w-full aspect-video max-w-4xl mx-auto mb-8 rounded-2xl overflow-hidden"
+        >
+          <motion.div
+            style={{ 
+              scale: imageScale,
+              opacity: imageOpacity,
+              y: imageY
             }}
-          />
-        </div>
+            className="absolute inset-0"
+          >
+            <Image
+              src={article?.immagine || ''}
+              alt={article?.titolo || ''}
+              fill
+              className="object-cover"
+              onError={(e) => {
+                const target = e.target as HTMLImageElement
+                target.src = '/placeholder-image.jpg'
+              }}
+            />
+            <motion.div 
+              className="absolute inset-0 bg-gradient-to-t from-zinc-900/80 to-transparent"
+              style={{ 
+                opacity: overlayOpacity
+              }}
+            />
+          </motion.div>
+        </motion.div>
 
-        {/* Contenuto articolo */}
-        <article className="max-w-4xl mx-auto">
-          <h1 className="font-serif text-3xl sm:text-4xl md:text-5xl font-bold text-zinc-50 mb-6 text-center">
-            {article.titolo}
-          </h1>
+        {/* Article content */}
+        <motion.article 
+          className="max-w-4xl mx-auto"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.5, delay: 0.4 }}
+        >
+          <motion.h1 
+            style={{ 
+              y: titleY,
+              scale: titleScale
+            }}
+            className="font-serif text-3xl sm:text-4xl md:text-5xl font-bold text-zinc-50 mb-6 text-center"
+          >
+            {article?.titolo}
+          </motion.h1>
 
-          {/* Info e metriche */}
-          <div className="flex flex-wrap items-center justify-between gap-4 mb-8 text-sm">
+          {/* Info and metrics */}
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.6 }}
+            className="flex flex-wrap items-center justify-between gap-4 mb-8 text-sm"
+          >
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-2">
                 <span className="font-medium text-zinc-50">Autore:</span>
-                <span className="text-zinc-400">{article.autore}</span>
+                <span className="text-zinc-400">{article?.autore}</span>
               </div>
-              {article.partecipanti && (
+              {article?.partecipanti && (
                 <div className="flex items-center gap-2">
                   <span className="font-medium text-zinc-50">Partecipanti:</span>
                   <span className="text-zinc-400">
@@ -835,12 +983,14 @@ export default function Article() {
               )}
               <span className="flex items-center text-zinc-400">
                 <FiClock className="mr-1 h-4 w-4" />
-                {getTimeAgo(article.creazione)}
+                {getTimeAgo(article?.creazione || '')}
               </span>
             </div>
 
             <div className="flex items-center gap-4">
-              <button 
+              <motion.button 
+                whileHover={{ scale: 1.1, backgroundColor: hasLiked ? '#e11d48' : 'rgba(225, 29, 72, 0.9)' }}
+                whileTap={{ scale: 0.95 }}
                 onClick={handleLike}
                 className={`flex items-center gap-1 px-3 py-1.5 rounded-full transition-all duration-300 cursor-pointer
                   ${hasLiked 
@@ -848,25 +998,40 @@ export default function Article() {
                     : 'bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white'
                   }`}
               >
-                <FiHeart className={`h-4 w-4 ${hasLiked ? 'fill-current' : ''}`} />
-                {article.upvote || 0}
-              </button>
-              <span className="flex items-center gap-1 px-3 py-1.5 bg-blue-500/10 text-blue-500 rounded-full">
+                <motion.div
+                  animate={hasLiked ? { 
+                    scale: [1, 1.2, 1],
+                  } : {}}
+                  transition={{ duration: 0.3 }}
+                >
+                  <FiHeart className={`h-4 w-4 ${hasLiked ? 'fill-current' : ''}`} />
+                </motion.div>
+                {article?.upvote || 0}
+              </motion.button>
+              <motion.span 
+                whileHover={{ scale: 1.1, backgroundColor: 'rgba(59, 130, 246, 0.2)' }}
+                className="flex items-center gap-1 px-3 py-1.5 bg-blue-500/10 text-blue-500 rounded-full"
+              >
                 <FiEye className="h-4 w-4" />
-                {article.view || 0}
-              </span>
-              <button 
+                {article?.view || 0}
+              </motion.span>
+              <motion.button 
+                whileHover={{ scale: 1.1, backgroundColor: '#10b981', color: 'white' }}
+                whileTap={{ scale: 0.95 }}
                 onClick={handleShare}
                 className="flex items-center gap-1 px-3 py-1.5 bg-emerald-500/10 text-emerald-500 rounded-full hover:bg-emerald-500 hover:text-white transition-all duration-300 cursor-pointer"
               >
                 <FiShare2 className="h-4 w-4" />
-                {article.shared || 0}
-              </button>
+                {article?.shared || 0}
+              </motion.button>
             </div>
-          </div>
+          </motion.div>
 
-          {/* Contenuto */}
-          <span 
+          {/* Content with staggered paragraph reveals */}
+          <motion.span 
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.8 }}
             className="text-lg leading-9 tracking-[0.04em] text-zinc-300
               font-montserrat block space-y-6 [&>p]:mb-6 
               [&>p]:leading-relaxed [&>p]:tracking-wide
@@ -914,7 +1079,7 @@ export default function Article() {
               [&_.note-text:hover_.note-tooltip]:opacity-100
               [&_.note-text:hover_.note-tooltip]:translate-y-0"
             dangerouslySetInnerHTML={{ 
-              __html: renderContentWithNotes(article.contenuto, article.notes) 
+              __html: renderContentWithNotes(article?.contenuto || '', article?.notes) 
             }}
           />
 
@@ -974,16 +1139,22 @@ export default function Article() {
             </div>
           )}
 
-          {/* Footer con info e metriche ripetute */}
-          <div className="border-t border-zinc-700 pt-8">
+          {/* Footer with parallax effect */}
+          <motion.div 
+            style={{ 
+              y: footerY,
+              opacity: footerOpacity
+            }}
+            className="border-t border-zinc-700 pt-8"
+          >
             <div className="flex flex-wrap items-center justify-between gap-4 text-sm">
               <div className="flex flex-col gap-4">
                 <div>
                   <span className="font-medium text-zinc-50 block mb-1">Autore</span>
-                  <span className="text-zinc-400">{article.autore}</span>
+                  <span className="text-zinc-400">{article?.autore}</span>
                 </div>
                 
-                {article.partecipanti && (
+                {article?.partecipanti && (
                   <div>
                     <span className="font-medium text-zinc-50 block mb-1">Partecipanti</span>
                     <span className="text-zinc-400">
@@ -996,12 +1167,14 @@ export default function Article() {
                 
                 <span className="flex items-center text-zinc-400">
                   <FiClock className="mr-1 h-4 w-4" />
-                  {getTimeAgo(article.creazione)}
+                  {getTimeAgo(article?.creazione || '')}
                 </span>
               </div>
 
               <div className="flex items-center gap-4">
-                <button 
+                <motion.button 
+                  whileHover={{ scale: 1.1, backgroundColor: hasLiked ? '#e11d48' : 'rgba(225, 29, 72, 0.9)' }}
+                  whileTap={{ scale: 0.95 }}
                   onClick={handleLike}
                   className={`flex items-center gap-1 px-3 py-1.5 rounded-full transition-all duration-300 cursor-pointer
                     ${hasLiked 
@@ -1009,41 +1182,60 @@ export default function Article() {
                       : 'bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white'
                     }`}
                 >
-                  <FiHeart className={`h-4 w-4 ${hasLiked ? 'fill-current' : ''}`} />
-                  {article.upvote || 0}
-                </button>
-                <span className="flex items-center gap-1 px-3 py-1.5 bg-blue-500/10 text-blue-500 rounded-full">
+                  <motion.div
+                    animate={hasLiked ? { 
+                      scale: [1, 1.2, 1],
+                    } : {}}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <FiHeart className={`h-4 w-4 ${hasLiked ? 'fill-current' : ''}`} />
+                  </motion.div>
+                  {article?.upvote || 0}
+                </motion.button>
+                <motion.span 
+                  whileHover={{ scale: 1.1, backgroundColor: 'rgba(59, 130, 246, 0.2)' }}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-blue-500/10 text-blue-500 rounded-full"
+                >
                   <FiEye className="h-4 w-4" />
-                  {article.view || 0}
-                </span>
-                <button 
+                  {article?.view || 0}
+                </motion.span>
+                <motion.button 
+                  whileHover={{ scale: 1.1, backgroundColor: '#10b981', color: 'white' }}
+                  whileTap={{ scale: 0.95 }}
                   onClick={handleShare}
                   className="flex items-center gap-1 px-3 py-1.5 bg-emerald-500/10 text-emerald-500 rounded-full hover:bg-emerald-500 hover:text-white transition-all duration-300 cursor-pointer"
                 >
                   <FiShare2 className="h-4 w-4" />
-                  {article.shared || 0}
-                </button>
+                  {article?.shared || 0}
+                </motion.button>
               </div>
             </div>
             
-            {/* Pulsante per tornare in cima */}
+            {/* Back to top button with animation */}
             <div className="flex justify-center mt-10">
-              <button
+              <motion.button
+                whileHover={{ scale: 1.1, y: -3, backgroundColor: '#3f3f46' }}
+                whileTap={{ scale: 0.95 }}
                 onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-                className="cursor-pointerflex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-full transition-colors duration-300"
+                className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-full transition-colors duration-300"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
-                </svg>
+                <motion.div
+                  animate={{ y: [2, -2, 2] }}
+                  transition={{ duration: 2, repeat: Infinity, repeatType: "mirror" }}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                  </svg>
+                </motion.div>
                 <span>Torna in cima</span>
-              </button>
+              </motion.button>
             </div>
-          </div>
-        </article>
+          </motion.div>
+        </motion.article>
       </div>
 
       {/* Modal per la condivisione (solo per admin) */}
       {showShareModal && <ShareModal />}
-    </main>
+    </motion.main>
   )
 } 

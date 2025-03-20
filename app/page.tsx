@@ -9,7 +9,7 @@ import { onAuthStateChanged, signOut, User } from "firebase/auth"
 import { auth } from "./firebase"
 import { ref, get, set } from "firebase/database"
 import { db } from "./firebase"
-
+import { motion } from "framer-motion"
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
@@ -20,6 +20,23 @@ export default function Home() {
 
   const [displayCount, setDisplayCount] = useState(0);
   const animationRef = useRef<number | null>(null);
+
+  // Rimuovo il riferimento per l'effetto parallax
+  // const parallaxRef = useRef<HTMLDivElement>(null)
+  
+  // Rimuovo l'effetto parallax sullo scroll
+  // useEffect(() => {
+  //   const handleScroll = () => {
+  //     if (!parallaxRef.current) return
+      
+  //     const scrollY = window.scrollY
+  //     parallaxRef.current.style.transform = `translateY(${scrollY * 0.2}px)`
+  //     parallaxRef.current.style.opacity = `${1 - scrollY * 0.002}`
+  //   }
+    
+  //   window.addEventListener('scroll', handleScroll)
+  //   return () => window.removeEventListener('scroll', handleScroll)
+  // }, [])
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -214,8 +231,8 @@ export default function Home() {
   }, []);
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-zinc-100 to-zinc-200/90 dark:from-zinc-900 dark:to-zinc-800">
-      {/* Stili per l'animazione del menu */}
+    <main className="min-h-screen bg-gradient-to-br from-zinc-100 to-zinc-200/90 dark:from-zinc-900 dark:to-zinc-800 overflow-x-hidden">
+      {/* Stili per l'animazione del menu e animazioni personalizzate */}
       <style jsx global>{`
         @keyframes fadeIn {
           from { opacity: 0; transform: translateY(-10px); }
@@ -224,10 +241,52 @@ export default function Home() {
         .animate-fade-in {
           animation: fadeIn 0.2s ease-out forwards;
         }
+        
+        @keyframes float {
+          0% { transform: translateY(0px); }
+          50% { transform: translateY(-15px); }
+          100% { transform: translateY(0px); }
+        }
+        .animate-float {
+          animation: float 6s ease-in-out infinite;
+        }
+        
+        @keyframes shine {
+          0% { background-position: -100px; }
+          60%, 100% { background-position: 200px; }
+        }
+        .animate-shine {
+          background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+          background-size: 200px 100%;
+          background-repeat: no-repeat;
+          background-position: -100px;
+          animation: shine 2s infinite;
+        }
       `}</style>
       
+      {/* Elementi decorativi di sfondo con parallax */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 0.05, scale: 1 }}
+          transition={{ duration: 2, ease: "easeOut" }}
+          className="absolute -top-[30%] -right-[20%] h-[80vh] w-[80vh] rounded-full bg-gradient-to-br from-amber-500/20 to-orange-500/10 blur-3xl dark:from-amber-500/10 dark:to-orange-500/5"
+        />
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 0.05, scale: 1 }}
+          transition={{ duration: 2, delay: 0.3, ease: "easeOut" }}
+          className="absolute -bottom-[40%] -left-[30%] h-[100vh] w-[100vh] rounded-full bg-gradient-to-tr from-blue-500/20 to-purple-500/10 blur-3xl dark:from-blue-500/10 dark:to-purple-500/5"
+        />
+      </div>
+      
       {/* Login/User Button */}
-      <div className="absolute top-4 right-4 sm:top-6 sm:right-8">
+      <motion.div 
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: "easeOut" }}
+        className="absolute top-4 right-4 sm:top-6 sm:right-8 z-10"
+      >
         {loading ? (
           <div className="h-10 w-24 bg-white/10 animate-pulse rounded-full"></div>
         ) : user ? (
@@ -320,17 +379,38 @@ export default function Home() {
             </Button>
           </Link>
         )}
-      </div>
+      </motion.div>
 
-      <div className="container mx-auto px-4 pt-16 sm:pt-24 md:pt-32">
+      <div className="container mx-auto px-4 pt-16 sm:pt-24 md:pt-32 relative">
         <div className="flex flex-col items-center justify-center space-y-8 sm:space-y-12 text-center">
-          {/* Title */}
-          <h1 className="font-serif text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-            PAXMAN NEWS
-          </h1>
+          {/* Title senza effetto parallax */}
+          <motion.div 
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, ease: "easeOut" }}
+            className="relative z-10"
+          >
+            <h1 className="font-serif text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 relative">
+              <span className="inline-block animate-float" style={{ animationDelay: "0s" }}>P</span>
+              <span className="inline-block animate-float" style={{ animationDelay: "0.1s" }}>A</span>
+              <span className="inline-block animate-float" style={{ animationDelay: "0.2s" }}>X</span>
+              <span className="inline-block animate-float" style={{ animationDelay: "0.3s" }}>M</span>
+              <span className="inline-block animate-float" style={{ animationDelay: "0.4s" }}>A</span>
+              <span className="inline-block animate-float" style={{ animationDelay: "0.5s" }}>N</span>
+              <span className="inline-block ml-5 animate-float" style={{ animationDelay: "0.6s" }}>N</span>
+              <span className="inline-block animate-float" style={{ animationDelay: "0.7s" }}>E</span>
+              <span className="inline-block animate-float" style={{ animationDelay: "0.8s" }}>W</span>
+              <span className="inline-block animate-float" style={{ animationDelay: "0.9s" }}>S</span>
+            </h1>
+          </motion.div>
 
-          {/* User Counter */}
-          <div className="flex flex-col items-center space-y-1">
+          {/* User Counter con animazione */}
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 1, delay: 0.5 }}
+            className="flex flex-col items-center space-y-1"
+          >
             <div className="flex items-baseline gap-2 text-zinc-500 dark:text-zinc-400">
               <span className="font-medium text-base">
                 {displayCount.toLocaleString()}
@@ -339,30 +419,49 @@ export default function Home() {
                 utenti registrati
               </span>
             </div>
-          </div>
+          </motion.div>
           
-          {/* Decorative line */}
-          <div className="w-16 sm:w-24 h-[1px] bg-zinc-800 dark:bg-zinc-200" />
+          {/* Decorative line con animazione */}
+          <motion.div 
+            initial={{ width: 0, opacity: 0 }}
+            animate={{ width: "6rem", opacity: 1 }}
+            transition={{ duration: 0.8, delay: 0.7 }}
+            className="h-[1px] bg-zinc-800 dark:bg-zinc-200"
+          />
 
-          {/* Topics Navigation */}
-          <div className="flex flex-wrap justify-center gap-2 sm:gap-3 max-w-4xl">
-            {topics.map((topic) => (
-              <Link 
+          {/* Topics Navigation con staggered animation */}
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.9 }}
+            className="flex flex-wrap justify-center gap-2 sm:gap-3 max-w-4xl"
+          >
+            {topics.map((topic, index) => (
+              <motion.div
                 key={topic}
-                href={`/articles?tag=${encodeURIComponent(topic)}`}
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.5, delay: 1 + index * 0.05 }}
               >
-                <Button
-                  variant="bordered"
-                  className="cursor-pointer text-xs sm:text-sm font-medium tracking-wider font-sans rounded-full hover:bg-zinc-800 hover:text-zinc-100 transition-all duration-500 ease-in-out"
-                >
-                  {topic}
-                </Button>
-              </Link>
+                <Link href={`/articles?tag=${encodeURIComponent(topic)}`}>
+                  <Button
+                    variant="bordered"
+                    className="cursor-pointer text-xs sm:text-sm font-medium tracking-wider font-sans rounded-full hover:bg-zinc-800 hover:text-zinc-100 transition-all duration-500 ease-in-out"
+                  >
+                    {topic}
+                  </Button>
+                </Link>
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
 
-          {/* Support Button and Instagram Icon */}
-          <div className="flex items-center gap-4">
+          {/* Support Button and Instagram Icon con animazione - ripristinato colore originale */}
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.8, delay: 1.2 }}
+            className="flex items-center gap-4"
+          >
             <Button
               variant="solid"
               className="bg-gradient-to-r rounded-full from-amber-500 to-orange-600 text-white shadow-lg cursor-pointer transition-all duration-500 ease-in-out hover:opacity-80 hover:shadow-2xl hover:scale-105 text-sm sm:text-base font-medium tracking-wide"
@@ -371,34 +470,62 @@ export default function Home() {
               Supporta il progetto
             </Button>
 
-            <a 
+            <motion.a 
               href="https://www.instagram.com/il_paxman/" 
               target="_blank" 
               rel="noopener noreferrer"
               className="p-2 rounded-full bg-white/10 dark:bg-zinc-800/50 backdrop-blur-md border border-white/20 text-zinc-800 dark:text-zinc-200 hover:bg-white/20 dark:hover:bg-zinc-700/60 transition-all duration-300"
+              whileHover={{ rotate: 10, scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
             >
               <FiInstagram className="h-5 w-5" />
-            </a>
-          </div>
+            </motion.a>
+          </motion.div>
 
-          {/* Featured News Section */}
-          <FeaturedNews />
+          {/* Featured News Section con fade in */}
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 1, delay: 1.4 }}
+            className="w-full"
+          >
+            <FeaturedNews />
+          </motion.div>
         </div>
       </div>
 
-      {/* Sezione Contattaci */}
-      <div className="mt-24 sm:mt-32 py-12 sm:py-16 bg-white/5 dark:bg-zinc-800/30 backdrop-blur-md border-t border-white/10">
+      {/* Sezione Contattaci con effetto parallax */}
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 1.5, delay: 1.6 }}
+        className="mt-24 sm:mt-32 py-12 sm:py-16 bg-white/5 dark:bg-zinc-800/30 backdrop-blur-md border-t border-white/10 relative"
+      >
         <div className="container mx-auto px-4">
           <div className="flex flex-col items-center justify-center">
-            <h2 className="font-serif text-3xl sm:text-4xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 mb-6">
+            <motion.h2 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, delay: 1.8 }}
+              className="font-serif text-3xl sm:text-4xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 mb-6"
+            >
               Contattaci
-            </h2>
+            </motion.h2>
             
-            <div className="w-16 h-[1px] bg-zinc-400 dark:bg-zinc-500 mb-8"></div>
+            <motion.div 
+              initial={{ width: 0 }}
+              animate={{ width: "4rem" }}
+              transition={{ duration: 0.8, delay: 2 }}
+              className="h-[1px] bg-zinc-400 dark:bg-zinc-500 mb-8"
+            />
             
-            {/* Link social e sito */}
+            {/* Link social e sito con staggered animation */}
             <div className="flex flex-wrap justify-center gap-4 mb-10">
-              <a 
+              <motion.a 
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.8, delay: 2.1 }}
+                whileHover={{ scale: 1.05 }}
                 href="https://www.instagram.com/il_paxman/" 
                 target="_blank" 
                 rel="noopener noreferrer"
@@ -406,9 +533,13 @@ export default function Home() {
               >
                 <FiInstagram className="h-5 w-5" />
                 <span>Profilo Instagram</span>
-              </a>
+              </motion.a>
               
-              <a 
+              <motion.a 
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.8, delay: 2.2 }}
+                whileHover={{ scale: 1.05 }}
                 href="https://federicodonati.netlify.app" 
                 target="_blank" 
                 rel="noopener noreferrer"
@@ -418,33 +549,47 @@ export default function Home() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
                 </svg>
                 <span>Contatta il Developer</span>
-              </a>
+              </motion.a>
             </div>
             
-            {/* Fondatori */}
-            <div className="text-center mb-8">
+            {/* Fondatori con animazione */}
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, delay: 2.3 }}
+              className="text-center mb-8"
+            >
               <h3 className="text-lg font-medium text-zinc-800 dark:text-zinc-200 mb-3">
                 I Fondatori
               </h3>
               <div className="flex flex-wrap justify-center gap-2 max-w-2xl mx-auto">
                 {["Federico Donati", "Francesco Maria Torella", "Federica De Ferrari", "Davide Simoni", "Lorenzo Brunetti"].map((name, index) => (
-                  <span 
+                  <motion.span 
                     key={index}
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.5, delay: 2.4 + index * 0.1 }}
+                    whileHover={{ scale: 1.1, backgroundColor: "rgba(255,255,255,0.2)" }}
                     className="inline-block px-3 py-1.5 bg-white/10 dark:bg-zinc-800/50 backdrop-blur-sm rounded-full text-sm text-zinc-700 dark:text-zinc-300 border border-white/20"
                   >
                     {name}
-                  </span>
+                  </motion.span>
                 ))}
               </div>
-            </div>
+            </motion.div>
             
             {/* Copyright */}
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            <motion.p 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.8, delay: 2.8 }}
+              className="text-sm text-zinc-500 dark:text-zinc-400"
+            >
               © {new Date().getFullYear()} PAXMAN NEWS. Tutti i diritti riservati.
-            </p>
+            </motion.p>
           </div>
         </div>
-      </div>
+      </motion.div>
     </main>
   )
 }

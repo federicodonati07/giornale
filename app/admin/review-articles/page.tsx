@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
@@ -10,6 +10,7 @@ import { ref, get, remove, update } from "firebase/database"
 import { onAuthStateChanged } from "firebase/auth"
 import { FirebaseError } from "firebase/app"
 import { auth, db, app } from "../../firebase"
+import { motion, useScroll, useTransform } from "framer-motion"
 
 interface ArticleData {
   uuid: string
@@ -38,6 +39,17 @@ export default function ReviewArticlesPage() {
   const [confirmAction, setConfirmAction] = useState<{ uuid: string, action: 'reject' | 'accept' } | null>(null)
   const [selectedArticle, setSelectedArticle] = useState<ArticleData | null>(null)
   const [showArticleModal, setShowArticleModal] = useState(false)
+  
+  // Refs per gli elementi con effetti parallax
+  const headerRef = useRef<HTMLDivElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
+  
+  // Setup per gli effetti di scrolling
+  const { scrollY } = useScroll()
+  const headerOpacity = useTransform(scrollY, [0, 100], [1, 0.6])
+  const headerScale = useTransform(scrollY, [0, 100], [1, 0.95])
+  const headerY = useTransform(scrollY, [0, 100], [0, -15])
+  const contentY = useTransform(scrollY, [0, 300], [0, -30])
 
   // Verifica se l'utente è autorizzato
   useEffect(() => {
@@ -462,18 +474,31 @@ export default function ReviewArticlesPage() {
       
       {/* Contenuto principale */}
       <div className="max-w-7xl mx-auto">
-        <div className="text-center mb-10">
+        <motion.div 
+          ref={headerRef}
+          className="text-center mb-10"
+          style={{ 
+            opacity: headerOpacity, 
+            scale: headerScale,
+            y: headerY 
+          }}
+        >
           <h1 className="font-serif text-4xl sm:text-5xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
             Revisione Articoli
           </h1>
           <p className="mt-3 text-zinc-600 dark:text-zinc-300 text-sm sm:text-base">
             Approva o rifiuta gli articoli in attesa di revisione
           </p>
-        </div>
+        </motion.div>
         
-        {/* Barra di ricerca */}
+        {/* Barra di ricerca con animazione */}
         {articles.length > 0 && (
-          <div className="backdrop-blur-xl bg-white/15 dark:bg-zinc-800/20 border border-white/30 dark:border-white/10 rounded-2xl shadow-xl p-4 mb-6">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }} 
+            animate={{ opacity: 1, y: 0 }} 
+            transition={{ duration: 0.6 }}
+            className="backdrop-blur-xl bg-white/15 dark:bg-zinc-800/20 border border-white/30 dark:border-white/10 rounded-2xl shadow-xl p-4 mb-6"
+          >
             <div className="flex flex-col sm:flex-row gap-4 items-center">
               <div className="w-full">
                 <input
@@ -485,133 +510,164 @@ export default function ReviewArticlesPage() {
                 />
               </div>
             </div>
-          </div>
+          </motion.div>
         )}
         
-        {/* Articoli da revisionare */}
-        {filteredArticles.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {filteredArticles.map((article) => (
-              <div 
-                key={article.uuid}
-                className="backdrop-blur-xl bg-white/15 dark:bg-zinc-800/20 border border-white/30 dark:border-white/10 rounded-2xl shadow-xl overflow-hidden transition-all duration-500 hover:shadow-[0_20px_60px_-15px_rgba(0,0,0,0.3)] dark:hover:shadow-[0_20px_60px_-15px_rgba(255,255,255,0.1)]"
-              >
-                {/* Intestazione con immagine */}
-                <div className="relative w-full h-48">
-                  <Image
-                    src={article.immagine}
-                    alt={article.titolo}
-                    fill
-                    className="object-cover"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.src = '/placeholder-image.jpg';
-                    }}
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent"></div>
-                  
-                  {/* Badge di stato */}
-                  <div className="absolute top-3 left-3 px-3 py-1 bg-purple-500 text-white text-xs font-medium tracking-wider rounded-full shadow-lg">
-                    IN REVISIONE
-                  </div>
-                  
-                  {/* Autore e data */}
-                  <div className="absolute bottom-3 left-3 right-3">
-                    <div className="flex items-center justify-between text-white">
-                      <div>
-                        <p className="font-medium">{article.autore}</p>
-                        <p className="text-xs opacity-80">{formatDate(article.creazione)}</p>
-                      </div>
-                      
-                      {/* Tag */}
-                      <div className="flex flex-wrap gap-1 justify-end">
-                        {article.tag?.split(',').slice(0, 2).map((tag, index) => (
-                          <span 
-                            key={index} 
-                            className="px-2 py-0.5 text-xs font-medium bg-white/20 rounded-full backdrop-blur-sm"
-                          >
-                            {tag.trim().toUpperCase()}
-                          </span>
-                        ))}
-                        {article.tag?.split(',').length > 2 && (
-                          <span className="text-xs opacity-80">+{article.tag.split(',').length - 2}</span>
-                        )}
+        {/* Articoli da revisionare con effetto parallax */}
+        <motion.div 
+          ref={contentRef}
+          style={{ y: contentY }}
+          className="relative"
+        >
+          {filteredArticles.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {filteredArticles.map((article, index) => (
+                <motion.div 
+                  key={article.uuid}
+                  initial={{ opacity: 0, y: 30 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, delay: index * 0.1 }}
+                  whileHover={{ y: -5 }}
+                  className="backdrop-blur-xl bg-white/15 dark:bg-zinc-800/20 border border-white/30 dark:border-white/10 rounded-2xl shadow-xl overflow-hidden transition-all duration-500 hover:shadow-[0_20px_60px_-15px_rgba(0,0,0,0.3)] dark:hover:shadow-[0_20px_60px_-15px_rgba(255,255,255,0.1)]"
+                >
+                  {/* Intestazione con immagine */}
+                  <div className="relative w-full h-48">
+                    <Image
+                      src={article.immagine}
+                      alt={article.titolo}
+                      fill
+                      className="object-cover"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.src = '/placeholder-image.jpg';
+                      }}
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent"></div>
+                    
+                    {/* Badge di stato con animazione */}
+                    <motion.div 
+                      className="absolute top-3 left-3 px-3 py-1 bg-purple-500 text-white text-xs font-medium tracking-wider rounded-full shadow-lg"
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      IN REVISIONE
+                    </motion.div>
+                    
+                    {/* Autore e data */}
+                    <div className="absolute bottom-3 left-3 right-3">
+                      <div className="flex items-center justify-between text-white">
+                        <div>
+                          <p className="font-medium">{article.autore}</p>
+                          <p className="text-xs opacity-80">{formatDate(article.creazione)}</p>
+                        </div>
+                        
+                        {/* Tag */}
+                        <div className="flex flex-wrap gap-1 justify-end">
+                          {article.tag?.split(',').slice(0, 2).map((tag, index) => (
+                            <span 
+                              key={index} 
+                              className="px-2 py-0.5 text-xs font-medium bg-white/20 rounded-full backdrop-blur-sm"
+                            >
+                              {tag.trim().toUpperCase()}
+                            </span>
+                          ))}
+                          {article.tag?.split(',').length > 2 && (
+                            <span className="text-xs opacity-80">+{article.tag.split(',').length - 2}</span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-                
-                {/* Contenuto */}
-                <div className="p-5">
-                  <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-50 mb-3">
-                    {article.titolo}
-                  </h2>
-                  <div className="text-sm text-zinc-600 dark:text-zinc-300 mb-5 line-clamp-3">
-                    {getExcerpt(article.contenuto, 160)}
-                  </div>
                   
-                  {/* Statistiche */}
-                  <div className="flex items-center justify-between border-t border-white/10 pt-4">
-                    <div className="flex gap-3">
-                      <div className="flex items-center text-zinc-600 dark:text-zinc-400" title="Visualizzazioni">
-                        <FiEye className="mr-1 h-4 w-4" />
-                        <span>{article.view || 0}</span>
-                      </div>
-                      <div className="flex items-center text-zinc-600 dark:text-zinc-400" title="Mi piace">
-                        <FiHeart className="mr-1 h-4 w-4" />
-                        <span>{article.upvote || 0}</span>
-                      </div>
-                      <div className="flex items-center text-zinc-600 dark:text-zinc-400" title="Condivisioni">
-                        <FiShare2 className="mr-1 h-4 w-4" />
-                        <span>{article.shared || 0}</span>
-                      </div>
+                  {/* Contenuto */}
+                  <div className="p-5">
+                    <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-50 mb-3">
+                      {article.titolo}
+                    </h2>
+                    <div className="text-sm text-zinc-600 dark:text-zinc-300 mb-5 line-clamp-3">
+                      {getExcerpt(article.contenuto, 160)}
                     </div>
                     
-                    {/* Pulsanti di azione */}
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => setConfirmAction({ uuid: article.uuid, action: 'reject' })}
-                        className="p-2 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-800/50 transition-colors duration-200 cursor-pointer"
-                        title="Rifiuta articolo"
-                      >
-                        <FiX className="h-5 w-5" />
-                      </button>
-                      <button
-                        onClick={() => setConfirmAction({ uuid: article.uuid, action: 'accept' })}
-                        className="p-2 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-800/50 transition-colors duration-200 cursor-pointer"
-                        title="Approva articolo"
-                      >
-                        <FiCheck className="h-5 w-5" />
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSelectedArticle(article)
-                          setShowArticleModal(true)
-                        }}
-                        className="p-2 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-colors duration-200 cursor-pointer"
-                        title="Visualizza articolo"
-                      >
-                        <FiMaximize2 className="h-5 w-5" />
-                      </button>
+                    {/* Statistiche */}
+                    <div className="flex items-center justify-between border-t border-white/10 pt-4">
+                      <div className="flex gap-3">
+                        <div className="flex items-center text-zinc-600 dark:text-zinc-400" title="Visualizzazioni">
+                          <FiEye className="mr-1 h-4 w-4" />
+                          <span>{article.view || 0}</span>
+                        </div>
+                        <div className="flex items-center text-zinc-600 dark:text-zinc-400" title="Mi piace">
+                          <FiHeart className="mr-1 h-4 w-4" />
+                          <span>{article.upvote || 0}</span>
+                        </div>
+                        <div className="flex items-center text-zinc-600 dark:text-zinc-400" title="Condivisioni">
+                          <FiShare2 className="mr-1 h-4 w-4" />
+                          <span>{article.shared || 0}</span>
+                        </div>
+                      </div>
+                      
+                      {/* Pulsanti di azione */}
+                      <div className="flex items-center gap-2">
+                        <motion.button
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.9 }}
+                          onClick={() => setConfirmAction({ uuid: article.uuid, action: 'reject' })}
+                          className="p-2 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-800/50 transition-colors duration-200 cursor-pointer"
+                          title="Rifiuta articolo"
+                        >
+                          <FiX className="h-5 w-5" />
+                        </motion.button>
+                        <motion.button
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.9 }}
+                          onClick={() => setConfirmAction({ uuid: article.uuid, action: 'accept' })}
+                          className="p-2 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-800/50 transition-colors duration-200 cursor-pointer"
+                          title="Approva articolo"
+                        >
+                          <FiCheck className="h-5 w-5" />
+                        </motion.button>
+                        <motion.button
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.9 }}
+                          onClick={() => {
+                            setSelectedArticle(article)
+                            setShowArticleModal(true)
+                          }}
+                          className="p-2 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-colors duration-200 cursor-pointer"
+                          title="Visualizza articolo"
+                        >
+                          <FiMaximize2 className="h-5 w-5" />
+                        </motion.button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="backdrop-blur-xl bg-white/15 dark:bg-zinc-800/20 border border-white/30 dark:border-white/10 rounded-2xl shadow-2xl p-12 text-center">
-            <FiAlertCircle className="mx-auto h-12 w-12 text-zinc-400 dark:text-zinc-500 mb-4" />
-            <h3 className="text-lg font-medium text-zinc-700 dark:text-zinc-300">
-              Nessun articolo da revisionare
-            </h3>
-            <p className="mt-2 text-zinc-500 dark:text-zinc-400">
-              {searchTerm 
-                ? 'Nessun articolo corrisponde ai criteri di ricerca' 
-                : 'Al momento non ci sono articoli in attesa di revisione'}
-            </p>
-          </div>
-        )}
+                </motion.div>
+              ))}
+            </div>
+          ) : (
+            <motion.div 
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6 }}
+              className="backdrop-blur-xl bg-white/15 dark:bg-zinc-800/20 border border-white/30 dark:border-white/10 rounded-2xl shadow-2xl p-12 text-center"
+            >
+              <motion.div 
+                initial={{ scale: 0.8 }}
+                animate={{ scale: 1 }}
+                transition={{ duration: 0.5, delay: 0.2 }}
+              >
+                <FiAlertCircle className="mx-auto h-12 w-12 text-zinc-400 dark:text-zinc-500 mb-4" />
+                <h3 className="text-lg font-medium text-zinc-700 dark:text-zinc-300">
+                  Nessun articolo da revisionare
+                </h3>
+                <p className="mt-2 text-zinc-500 dark:text-zinc-400">
+                  {searchTerm 
+                    ? 'Nessun articolo corrisponde ai criteri di ricerca' 
+                    : 'Al momento non ci sono articoli in attesa di revisione'}
+                </p>
+              </motion.div>
+            </motion.div>
+          )}
+        </motion.div>
       </div>
     </main>
   )

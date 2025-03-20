@@ -10,6 +10,7 @@ import { onAuthStateChanged } from "firebase/auth"
 import { ref as dbRef, set } from "firebase/database"
 import { ref as storageRef, uploadBytesResumable, getDownloadURL } from "firebase/storage"
 import { auth, db, storage } from "../../firebase"
+import { motion, useScroll, useTransform } from "framer-motion"
 
 // Categorie disponibili
 const availableCategories = [
@@ -65,6 +66,17 @@ export default function NewArticlePage() {
   const [showTagsDropdown, setShowTagsDropdown] = useState(false)
   const [partecipanti, setPartecipanti] = useState("")
   const tagDropdownRef = useRef<HTMLDivElement>(null)
+  
+  // Refs per gli elementi con effetti parallax
+  const headerRef = useRef<HTMLDivElement>(null)
+  const formRef = useRef<HTMLDivElement>(null)
+  
+  // Setup per gli effetti di scrolling
+  const { scrollY } = useScroll()
+  const headerOpacity = useTransform(scrollY, [0, 100], [1, 0.6])
+  const headerScale = useTransform(scrollY, [0, 100], [1, 0.95])
+  const headerY = useTransform(scrollY, [0, 100], [0, -15])
+  const formY = useTransform(scrollY, [0, 300], [0, -30])
   
   // Aggiungi questi stati
   const [activeFormats, setActiveFormats] = useState({
@@ -503,17 +515,29 @@ export default function NewArticlePage() {
       
       {/* Contenuto principale */}
       <div className="max-w-5xl mx-auto">
-        <div className="text-center mb-10">
+        <motion.div 
+          ref={headerRef}
+          className="text-center mb-10"
+          style={{ 
+            opacity: headerOpacity, 
+            scale: headerScale,
+            y: headerY 
+          }}
+        >
           <h1 className="font-serif text-4xl sm:text-5xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
             Crea un nuovo articolo
           </h1>
           <p className="mt-3 text-zinc-600 dark:text-zinc-300 text-sm sm:text-base">
             Compila tutti i campi per creare un nuovo articolo
           </p>
-        </div>
+        </motion.div>
         
-        {/* Form */}
-        <div className="backdrop-blur-xl bg-white/15 dark:bg-zinc-800/20 border border-white/30 dark:border-white/10 rounded-2xl shadow-2xl p-8 transition-all duration-500 hover:shadow-[0_20px_60px_-15px_rgba(0,0,0,0.3)] dark:hover:shadow-[0_20px_60px_-15px_rgba(255,255,255,0.1)]">
+        {/* Form con effetto parallax */}
+        <motion.div 
+          ref={formRef}
+          style={{ y: formY }}
+          className="backdrop-blur-xl bg-white/15 dark:bg-zinc-800/20 border border-white/30 dark:border-white/10 rounded-2xl shadow-2xl p-8 transition-all duration-500 hover:shadow-[0_20px_60px_-15px_rgba(0,0,0,0.3)] dark:hover:shadow-[0_20px_60px_-15px_rgba(255,255,255,0.1)]"
+        >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Titolo */}
             <div className="md:col-span-2">
@@ -1019,7 +1043,7 @@ export default function NewArticlePage() {
               {saving ? "Invio in corso..." : "Manda a revisione"}
             </Button>
           </div>
-        </div>
+        </motion.div>
         
         {/* Informazioni aggiuntive */}
         <div className="mt-8 text-center text-xs text-zinc-500 dark:text-zinc-400">
