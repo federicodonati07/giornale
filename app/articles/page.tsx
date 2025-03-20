@@ -18,6 +18,7 @@ interface ArticleData {
   upvote: number
   shared: number
   view: number
+  status?: string
 }
 
 const topics = [
@@ -55,10 +56,15 @@ export default function Articles() {
           const articlesData: ArticleData[] = []
           
           snapshot.forEach((childSnapshot) => {
-            articlesData.push({
+            const article = {
               uuid: childSnapshot.key || '',
               ...childSnapshot.val()
-            })
+            };
+            
+            // Solo gli articoli con status "accepted" o quelli senza status (retrocompatibilità)
+            if (article.status === 'accepted' || !article.status) {
+              articlesData.push(article);
+            }
           })
           
           // Ordiniamo gli articoli lato client
@@ -337,7 +343,7 @@ export default function Articles() {
               </div>
             ))}
           </div>
-        ) : (
+        ) : displayedArticles.length > 0 ? (
           <div className="grid gap-6 md:gap-8">
             {displayedArticles.map((article) => (
               <Link 
@@ -424,6 +430,29 @@ export default function Articles() {
                 {showAllArticles ? 'Mostra meno articoli' : `Mostra altri ${filteredArticles.length - 15} articoli`}
               </button>
             )}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+            <div className="h-24 w-24 flex items-center justify-center bg-zinc-100 dark:bg-zinc-800 rounded-full mb-6">
+              <svg 
+                xmlns="http://www.w3.org/2000/svg" 
+                className="h-12 w-12 text-zinc-500 dark:text-zinc-400" 
+                fill="none" 
+                viewBox="0 0 24 24" 
+                stroke="currentColor" 
+                strokeWidth={1.5}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 10.5L14.5 15.5M14.5 10.5L9.5 15.5M4 19.5C4 18.837 4.26339 18.2011 4.73223 17.7322C5.20107 17.2634 5.83696 17 6.5 17H20M6.5 2H17.5L22 6.5V17.5C22 18.163 21.7366 18.7989 21.2678 19.2678C20.7989 19.7366 20.163 20 19.5 20H6.5C5.83696 20 5.20107 19.7366 4.73223 19.2678C4.26339 18.7989 4 18.163 4 17.5V4.5C4 3.83696 4.26339 3.20107 4.73223 2.73223C5.20107 2.26339 5.83696 2 6.5 2Z" />
+              </svg>
+            </div>
+            <h3 className="text-xl font-serif font-bold text-zinc-800 dark:text-zinc-200 mb-2">
+              Nessun articolo trovato
+            </h3>
+            <p className="text-zinc-600 dark:text-zinc-400 max-w-md">
+              {selectedTags.length > 0 || searchQuery
+                ? "Non abbiamo trovato articoli che corrispondono ai tuoi criteri di ricerca."
+                : "Non ci sono ancora articoli disponibili."}
+            </p>
           </div>
         )}
       </div>

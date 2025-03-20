@@ -43,6 +43,7 @@ interface ArticleData {
   view: number;
   userId: string;
   isPrivate: boolean;
+  status: string;
 }
 
 export default function NewArticlePage() {
@@ -264,6 +265,7 @@ export default function NewArticlePage() {
         view: 0,
         userId: currentUser.uid,
         isPrivate,
+        status: 'revision',
       }
 
       try {
@@ -271,7 +273,7 @@ export default function NewArticlePage() {
         const articleRef = dbRef(db, `articoli/${articleUuid}`)
         await set(articleRef, articleData)
         
-        showNotification("success", "Articolo creato con successo!")
+        showNotification("success", "Articolo inviato alla revisione")
         
         // Attendi un breve momento prima di reindirizzare per permettere all'utente di vedere la notifica
         setTimeout(() => {
@@ -1014,7 +1016,7 @@ export default function NewArticlePage() {
               disabled={saving}
             >
               <FiSave className="mr-2 h-5 w-5" />
-              {saving ? "Salvataggio in corso..." : "Salva articolo"}
+              {saving ? "Invio in corso..." : "Manda a revisione"}
             </Button>
           </div>
         </div>
@@ -1022,7 +1024,7 @@ export default function NewArticlePage() {
         {/* Informazioni aggiuntive */}
         <div className="mt-8 text-center text-xs text-zinc-500 dark:text-zinc-400">
           <p>I campi contrassegnati con * sono obbligatori</p>
-          <p className="mt-1">L&apos;articolo sarà pubblicato immediatamente dopo il salvataggio</p>
+          <p className="mt-1">L&apos;articolo sarà inviato a revisione prima di essere pubblicato</p>
         </div>
       </div>
     </main>

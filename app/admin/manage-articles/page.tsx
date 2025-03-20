@@ -25,6 +25,7 @@ interface ArticleData {
   partecipanti?: string
   isPrivate: boolean
   additionalLinks?: { label: string; url: string }[]
+  status?: string
 }
 
 export default function ManageArticlesPage() {

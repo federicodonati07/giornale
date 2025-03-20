@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { Button } from "@heroui/react"
-import { FiHeart, FiUser, FiLogOut, FiPlus, FiChevronDown, FiList, FiInstagram } from "react-icons/fi"
+import { FiHeart, FiUser, FiLogOut, FiPlus, FiChevronDown, FiList, FiInstagram, FiEdit } from "react-icons/fi"
 import { FeaturedNews } from "./components/FeaturedNews"
 import Link from "next/link"
 import { onAuthStateChanged, signOut, User } from "firebase/auth"
@@ -16,6 +16,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const [pendingReviewCount, setPendingReviewCount] = useState(0);
 
   const [displayCount, setDisplayCount] = useState(0);
   const animationRef = useRef<number | null>(null);
@@ -28,6 +29,41 @@ export default function Home() {
 
     return () => unsubscribe();
   }, []);
+
+  // Ottieni il numero di articoli in attesa di revisione
+  useEffect(() => {
+    const fetchPendingReviewArticles = async () => {
+      if (!user) return;
+      
+      // Controlla se l'utente è un revisore superiore
+      const superiorEmails = JSON.parse(process.env.NEXT_PUBLIC_SUPERIOR_EMAILS || "[]");
+      if (!superiorEmails.includes(user.email)) return;
+      
+      try {
+        const articlesRef = ref(db, 'articoli');
+        const snapshot = await get(articlesRef);
+        
+        if (snapshot.exists()) {
+          let count = 0;
+          
+          snapshot.forEach((childSnapshot) => {
+            const article = childSnapshot.val();
+            if (article.status === 'revision') {
+              count++;
+            }
+          });
+          
+          setPendingReviewCount(count);
+        } else {
+          setPendingReviewCount(0);
+        }
+      } catch (error) {
+        console.error("Errore nel recupero degli articoli da revisionare:", error);
+      }
+    };
+    
+    fetchPendingReviewArticles();
+  }, [user]);
 
   const handleSignOut = async () => {
     try {
@@ -48,6 +84,11 @@ export default function Home() {
   // Controlla se l'utente è un amministratore
   const isAdmin = user?.email && JSON.parse(
     process.env.NEXT_PUBLIC_ADMIN_EMAILS || "[]"
+  ).includes(user.email);
+
+  // Controlla se l'utente è un revisore superiore
+  const isSuperior = user?.email && JSON.parse(
+    process.env.NEXT_PUBLIC_SUPERIOR_EMAILS || "[]"
   ).includes(user.email);
 
   // Chiudi il menu quando si clicca fuori
@@ -195,11 +236,20 @@ export default function Home() {
               className="flex items-center bg-white/10 dark:bg-zinc-800/50 backdrop-blur-md rounded-full py-2 px-4 border border-white/20 cursor-pointer hover:bg-white/20 dark:hover:bg-zinc-700/60 transition-all duration-300"
               onClick={() => setShowUserMenu(!showUserMenu)}
             >
-              <FiUser className="mr-2 h-4 w-4 text-zinc-800 dark:text-zinc-200" />
+              <div className="relative">
+                <FiUser className="mr-2 h-4 w-4 text-zinc-800 dark:text-zinc-200" />
+              </div>
               <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200 truncate max-w-[150px]">
                 {getUserDisplayName()}
               </span>
               <FiChevronDown className={`ml-2 h-4 w-4 text-zinc-500 transition-transform duration-300 ${showUserMenu ? 'rotate-180' : ''}`} />
+              
+              {/* Badge posizionato all'estrema destra */}
+              {isSuperior && pendingReviewCount > 0 && (
+                <div className="absolute -right-2 top-0 h-5 w-5 bg-red-500 rounded-full flex items-center justify-center shadow-lg border border-white/20">
+                  <span className="text-white text-xs font-bold">{pendingReviewCount > 9 ? '9+' : pendingReviewCount}</span>
+                </div>
+              )}
             </div>
             
             {/* Menu a tendina */}
@@ -227,6 +277,21 @@ export default function Home() {
                         Gestisci Articoli
                       </div>
                     </Link>
+                    {isSuperior && (
+                      <Link href="/admin/review-articles">
+                        <div className="relative flex items-center px-3 py-2 text-sm text-zinc-800 dark:text-zinc-200 hover:bg-purple-500/10 hover:text-purple-500 rounded-lg transition-all duration-300 cursor-pointer">
+                          <FiEdit className="mr-2 h-4 w-4" />
+                          <span>Revisione Articoli</span>
+                          
+                          {/* Badge posizionato all'estrema destra */}
+                          {pendingReviewCount > 0 && (
+                            <div className="absolute right-2 h-5 w-5 bg-red-500 rounded-full flex items-center justify-center shadow-lg border border-white/20">
+                              <span className="text-white text-xs font-bold">{pendingReviewCount > 9 ? '9+' : pendingReviewCount}</span>
+                            </div>
+                          )}
+                        </div>
+                      </Link>
+                    )}
                     <div className="my-1 border-t border-zinc-200 dark:border-zinc-700"></div>
                   </div>
                 )}

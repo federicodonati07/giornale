@@ -18,6 +18,7 @@ interface ArticleData {
   upvote: number
   shared: number
   view: number
+  status?: string
 }
 
 export function FeaturedNews() {
@@ -42,10 +43,15 @@ export function FeaturedNews() {
           
           // Converti lo snapshot in un array di articoli
           snapshot.forEach((childSnapshot) => {
-            articlesData.push({
+            const article = {
               uuid: childSnapshot.key || '',
               ...childSnapshot.val()
-            })
+            } as ArticleData;
+            
+            // Solo gli articoli con status "accepted" o quelli senza status (retrocompatibilità)
+            if (article.status === 'accepted' || !article.status) {
+              articlesData.push(article);
+            }
           })
           
           // Ordina gli articoli per data di creazione (dal più recente)

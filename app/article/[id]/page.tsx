@@ -2,11 +2,13 @@
 
 import { useState, useEffect, useCallback } from "react"
 import Image from "next/image"
-import { ref, get, update, increment } from "firebase/database"
-import { db, auth } from "../../firebase"
-import { FiHeart, FiShare2, FiEye, FiClock, FiArrowLeft, FiLock } from "react-icons/fi"
+import { ref, get, update, increment, remove } from "firebase/database"
+import { db, auth, app } from "../../firebase"
+import { FiHeart, FiShare2, FiEye, FiClock, FiArrowLeft, FiLock, FiCheck, FiX } from "react-icons/fi"
+import { getStorage, ref as storageRef, deleteObject } from "firebase/storage"
 import Link from "next/link"
-import { useParams } from "next/navigation"
+import { useParams, useRouter } from "next/navigation"
+import { FirebaseError } from "firebase/app"
 
 interface ArticleData {
   uuid: string
@@ -31,10 +33,12 @@ interface ArticleData {
     endOffset: number;
   }>
   secondaryNotes?: Array<{ id: string, content: string }>
+  status?: string
 }
 
 export default function Article() {
   const params = useParams()
+  const router = useRouter()
   const [article, setArticle] = useState<ArticleData | null>(null)
   const [loading, setLoading] = useState(true)
   const [hasLiked, setHasLiked] = useState(false)
@@ -44,6 +48,8 @@ export default function Article() {
   const [showShareModal, setShowShareModal] = useState(false)
   const [articleUrl, setArticleUrl] = useState('')
   const [isAdmin, setIsAdmin] = useState(false)
+  const [isSuperior, setIsSuperior] = useState(false)
+  const [confirmAction, setConfirmAction] = useState<{ action: 'reject' | 'accept' } | null>(null)
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((currentUser) => {
@@ -51,9 +57,13 @@ export default function Article() {
       
       // Verifica se l'utente è un amministratore
       const adminEmails = JSON.parse(process.env.NEXT_PUBLIC_ADMIN_EMAILS || "[]")
+      const superiorEmails = JSON.parse(process.env.NEXT_PUBLIC_SUPERIOR_EMAILS || "[]")
       
       setIsAdmin(
         currentUser?.email ? adminEmails.includes(currentUser.email) : false
+      )
+      setIsSuperior(
+        currentUser?.email ? superiorEmails.includes(currentUser.email) : false
       )
     })
 
@@ -72,6 +82,13 @@ export default function Article() {
             uuid: snapshot.key || '',
             ...snapshot.val()
           }
+          
+          // Verifica se l'articolo è in stato di revisione e l'utente non è admin
+          if (articleData.status === 'revision' && !isAdmin) {
+            router.push('/');
+            return;
+          }
+          
           setArticle(articleData)
 
           // Incrementa le visualizzazioni solo se l'utente è autenticato
@@ -91,7 +108,7 @@ export default function Article() {
     if (params.id) {
       fetchArticle()
     }
-  }, [params.id, user])
+  }, [params.id, user, isAdmin, router])
 
   // Gestione visualizzazioni
   useEffect(() => {
@@ -208,6 +225,68 @@ export default function Article() {
     }
   }
 
+  // Funzione per accettare un articolo
+  const acceptArticle = async () => {
+    if (!article) return;
+    
+    try {
+      const articleRef = ref(db, `articoli/${article.uuid}`)
+      await update(articleRef, {
+        status: 'accepted'
+      })
+      
+      showMessage("Articolo accettato con successo")
+      // Aggiorna lo stato dell'articolo
+      setArticle(prev => prev ? { ...prev, status: 'accepted' } : null)
+      setConfirmAction(null)
+    } catch (error) {
+      console.error("Errore durante l'accettazione:", error)
+      showMessage("Errore durante l'accettazione dell'articolo")
+    }
+  }
+
+  // Funzione per rifiutare e eliminare un articolo
+  const rejectArticle = async () => {
+    if (!article) return;
+    
+    try {
+      // Elimina l'articolo dal database
+      const articleRef = ref(db, `articoli/${article.uuid}`);
+      await remove(articleRef);
+      
+      // Elimina l'immagine dallo storage se esiste
+      if (article.immagine && article.immagine.includes('firebasestorage.googleapis.com')) {
+        try {
+          // Estrai il percorso dell'immagine dall'URL
+          const storage = getStorage(app);
+          const imageUrl = new URL(article.immagine);
+          const imagePath = decodeURIComponent(imageUrl.pathname.split('/o/')[1].split('?')[0]);
+          const imageRef = storageRef(storage, imagePath);
+          
+          await deleteObject(imageRef);
+          console.log("Immagine eliminata con successo");
+        } catch (imageError: FirebaseError | unknown) {
+          // Ignora l'errore se l'oggetto non esiste
+          if (imageError instanceof FirebaseError && imageError.code === 'storage/object-not-found') {
+            console.log("L'immagine non esiste più nello storage");
+          } else {
+            console.error("Errore durante l'eliminazione dell'immagine:", imageError);
+          }
+        }
+      }
+      
+      showMessage("Articolo rifiutato e rimosso con successo");
+      setConfirmAction(null);
+      
+      // Ridireziona alla home dopo un breve ritardo
+      setTimeout(() => {
+        router.push('/admin/review-articles');
+      }, 1500);
+    } catch (error) {
+      console.error("Errore durante il rifiuto:", error);
+      showMessage("Errore durante il rifiuto dell'articolo");
+    }
+  }
 
   const getTimeAgo = (dateString: string) => {
     const date = new Date(dateString)
@@ -618,16 +697,103 @@ export default function Article() {
         </div>
       )}
 
+      {/* Popup di conferma azione */}
+      {confirmAction && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-zinc-800 rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <div className="text-center mb-6">
+              <div className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4 ${
+                confirmAction.action === 'reject' 
+                  ? 'bg-red-100 dark:bg-red-900/30' 
+                  : 'bg-green-100 dark:bg-green-900/30'
+              }`}>
+                {confirmAction.action === 'reject' ? (
+                  <FiX className="h-6 w-6 text-red-600 dark:text-red-400" />
+                ) : (
+                  <FiCheck className="h-6 w-6 text-green-600 dark:text-green-400" />
+                )}
+              </div>
+              <h2 className="text-xl font-serif font-bold text-zinc-900 dark:text-zinc-50 mb-2">
+                {confirmAction.action === 'reject' 
+                  ? 'Conferma rifiuto' 
+                  : 'Conferma accettazione'}
+              </h2>
+              <p className="text-zinc-600 dark:text-zinc-300">
+                {confirmAction.action === 'reject' 
+                  ? 'Sei sicuro di voler rifiutare e eliminare questo articolo? Questa azione non può essere annullata.' 
+                  : 'Sei sicuro di voler approvare questo articolo? Sarà pubblicato immediatamente.'}
+              </p>
+            </div>
+            
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={() => setConfirmAction(null)}
+                className="px-4 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-700 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-colors duration-200 cursor-pointer"
+              >
+                Annulla
+              </button>
+              <button
+                onClick={() => confirmAction.action === 'reject' 
+                  ? rejectArticle() 
+                  : acceptArticle()
+                }
+                className={`px-4 py-2 rounded-xl text-white transition-colors duration-200 cursor-pointer ${
+                  confirmAction.action === 'reject'
+                    ? 'bg-red-600 hover:bg-red-700'
+                    : 'bg-green-600 hover:bg-green-700'
+                }`}
+              >
+                {confirmAction.action === 'reject' ? 'Rifiuta' : 'Accetta'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="container mx-auto px-4 py-8 sm:py-12">
         {/* Header con navigazione */}
         <div className="mb-8">
           <Link 
-            href="/articles"
+            href={isAdmin && article?.status === 'revision' ? "/admin/review-articles" : "/articles"}
             className="inline-flex items-center text-sm text-zinc-400 hover:text-amber-400 transition-colors duration-300 mb-4"
           >
             <FiArrowLeft className="mr-2 h-4 w-4" />
-            Torna agli articoli
+            {isAdmin && article?.status === 'revision' ? "Torna a revisione articoli" : "Torna agli articoli"}
           </Link>
+          
+          {/* Banner di revisione */}
+          {article?.status === 'revision' && (isSuperior || isAdmin) && (
+            <div className="bg-purple-500/20 border border-purple-500/30 rounded-xl p-4 mb-4 flex items-center justify-between">
+              <div className="flex items-center">
+                <div className="h-8 w-8 bg-purple-500 rounded-full flex items-center justify-center mr-3">
+                  <FiEye className="h-4 w-4 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-medium text-purple-100">Articolo in revisione</h3>
+                  <p className="text-sm text-purple-200/70">Questo articolo non è ancora pubblicato e richiede approvazione.</p>
+                </div>
+              </div>
+              
+              {isSuperior && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setConfirmAction({ action: 'reject' })}
+                    className="p-2 rounded-xl bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-800/50 transition-colors duration-200 cursor-pointer"
+                    title="Rifiuta articolo"
+                  >
+                    <FiX className="h-5 w-5" />
+                  </button>
+                  <button
+                    onClick={() => setConfirmAction({ action: 'accept' })}
+                    className="p-2 rounded-xl bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-800/50 transition-colors duration-200 cursor-pointer"
+                    title="Approva articolo"
+                  >
+                    <FiCheck className="h-5 w-5" />
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Immagine principale */}
