@@ -31,6 +31,7 @@ interface ArticleData {
 export default function ManageArticlesPage() {
   const router = useRouter()
   const [isAdmin, setIsAdmin] = useState(false)
+  const [isSuperior, setIsSuperior] = useState(false)
   const [loading, setLoading] = useState(true)
   const [articles, setArticles] = useState<ArticleData[]>([])
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
@@ -43,9 +44,16 @@ export default function ManageArticlesPage() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       const adminEmails = JSON.parse(process.env.NEXT_PUBLIC_ADMIN_EMAILS || "[]")
+      const superiorEmails = JSON.parse(process.env.NEXT_PUBLIC_SUPERIOR_EMAILS || "[]")
       
       if (user && adminEmails.includes(user.email || '')) {
         setIsAdmin(true)
+        
+        // Verifica se l'utente è anche un superiore
+        if (superiorEmails.includes(user.email || '')) {
+          setIsSuperior(true)
+        }
+        
         fetchArticles()
       } else {
         router.push('/')
@@ -400,13 +408,19 @@ export default function ManageArticlesPage() {
                     {/* Azioni */}
                     <td className="p-3">
                       <div className="flex justify-center gap-2">
-                        <button 
-                          className="p-2 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-red-100 dark:hover:bg-red-900/30 hover:text-red-600 dark:hover:text-red-400 transition-colors duration-200 cursor-pointer"
-                          onClick={() => setDeleteConfirm(article.uuid)}
-                          title="Elimina articolo"
-                        >
-                          <FiTrash2 className="h-4 w-4" />
-                        </button>
+                        {isSuperior ? (
+                          <button 
+                            className="p-2 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-red-100 dark:hover:bg-red-900/30 hover:text-red-600 dark:hover:text-red-400 transition-colors duration-200 cursor-pointer"
+                            onClick={() => setDeleteConfirm(article.uuid)}
+                            title="Elimina articolo"
+                          >
+                            <FiTrash2 className="h-4 w-4" />
+                          </button>
+                        ) : (
+                          <div className="p-2 rounded-full bg-zinc-100/50 dark:bg-zinc-800/50 text-zinc-400 dark:text-zinc-600 opacity-50 cursor-not-allowed" title="Solo gli utenti SUPERIOR possono eliminare gli articoli">
+                            <FiTrash2 className="h-4 w-4" />
+                          </div>
+                        )}
                       </div>
                     </td>
                   </tr>

@@ -383,6 +383,66 @@ export default function Home() {
           <FeaturedNews />
         </div>
       </div>
+
+      {/* Sezione Contattaci */}
+      <div className="mt-24 sm:mt-32 py-12 sm:py-16 bg-white/5 dark:bg-zinc-800/30 backdrop-blur-md border-t border-white/10">
+        <div className="container mx-auto px-4">
+          <div className="flex flex-col items-center justify-center">
+            <h2 className="font-serif text-3xl sm:text-4xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 mb-6">
+              Contattaci
+            </h2>
+            
+            <div className="w-16 h-[1px] bg-zinc-400 dark:bg-zinc-500 mb-8"></div>
+            
+            {/* Link social e sito */}
+            <div className="flex flex-wrap justify-center gap-4 mb-10">
+              <a 
+                href="https://www.instagram.com/il_paxman/" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl transition-all duration-300 hover:shadow-lg hover:opacity-90"
+              >
+                <FiInstagram className="h-5 w-5" />
+                <span>Profilo Instagram</span>
+              </a>
+              
+              <a 
+                href="https://federicodonati.netlify.app" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-xl transition-all duration-300 hover:shadow-lg hover:opacity-90"
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                </svg>
+                <span>Contatta il Developer</span>
+              </a>
+            </div>
+            
+            {/* Fondatori */}
+            <div className="text-center mb-8">
+              <h3 className="text-lg font-medium text-zinc-800 dark:text-zinc-200 mb-3">
+                I Fondatori
+              </h3>
+              <div className="flex flex-wrap justify-center gap-2 max-w-2xl mx-auto">
+                {["Federico Donati", "Francesco Maria Torella", "Federica De Ferrari", "Davide Simoni", "Lorenzo Brunetti"].map((name, index) => (
+                  <span 
+                    key={index}
+                    className="inline-block px-3 py-1.5 bg-white/10 dark:bg-zinc-800/50 backdrop-blur-sm rounded-full text-sm text-zinc-700 dark:text-zinc-300 border border-white/20"
+                  >
+                    {name}
+                  </span>
+                ))}
+              </div>
+            </div>
+            
+            {/* Copyright */}
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              © {new Date().getFullYear()} PAXMAN NEWS. Tutti i diritti riservati.
+            </p>
+          </div>
+        </div>
+      </div>
     </main>
   )
 }
@@ -395,8 +455,8 @@ const topics = [
   "TECNOLOGIA",
   "SPORT",
   "AVIAZIONE",
-  "SCIENZE",
+  "SCIENZE & NATURA",
   "MEDICINA",
-  "NATURA",
+  "ARTE & CULTURA",
   "ITALIA"
 ] 

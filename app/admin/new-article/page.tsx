@@ -20,9 +20,9 @@ const availableCategories = [
   "TECNOLOGIA",
   "SPORT",
   "AVIAZIONE",
-  "SCIENZE",
+  "SCIENZE & NATURA",
   "MEDICINA",
-  "NATURA",
+  "ARTE & CULTURA",
   "ITALIA"
 ]
 
