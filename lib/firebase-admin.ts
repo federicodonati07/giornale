@@ -1,5 +1,5 @@
 import { getApps, initializeApp, cert } from "firebase-admin/app";
-import { Auth, getAuth } from "firebase-admin/auth";
+import { getAuth } from "firebase-admin/auth";
 
 // Inizializza l'Admin SDK di Firebase se non è già stato inizializzato
 export function initAdminSDK() {

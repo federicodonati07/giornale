@@ -41,12 +41,7 @@ export default function ManageArticlesPage() {
   // Verifica se l'utente è autorizzato
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      const adminEmails = [
-        process.env.NEXT_PUBLIC_ADMIN_EMAIL_1,
-        process.env.NEXT_PUBLIC_ADMIN_EMAIL_2,
-        process.env.NEXT_PUBLIC_ADMIN_EMAIL_3,
-        process.env.NEXT_PUBLIC_ADMIN_EMAIL_4
-      ]
+      const adminEmails = JSON.parse(process.env.NEXT_PUBLIC_ADMIN_EMAILS || "[]")
       
       if (user && adminEmails.includes(user.email || '')) {
         setIsAdmin(true)

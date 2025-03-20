@@ -50,12 +50,7 @@ export default function Article() {
       setUser(currentUser)
       
       // Verifica se l'utente è un amministratore
-      const adminEmails = [
-        process.env.NEXT_PUBLIC_ADMIN_EMAIL_1,
-        process.env.NEXT_PUBLIC_ADMIN_EMAIL_2,
-        process.env.NEXT_PUBLIC_ADMIN_EMAIL_3,
-        process.env.NEXT_PUBLIC_ADMIN_EMAIL_4
-      ]
+      const adminEmails = JSON.parse(process.env.NEXT_PUBLIC_ADMIN_EMAILS || "[]")
       
       setIsAdmin(
         currentUser?.email ? adminEmails.includes(currentUser.email) : false
