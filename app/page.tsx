@@ -7,6 +7,8 @@ import { FeaturedNews } from "./components/FeaturedNews"
 import Link from "next/link"
 import { onAuthStateChanged, signOut, User } from "firebase/auth"
 import { auth } from "./firebase"
+import { ref, get, set } from "firebase/database"
+import { db } from "./firebase"
 
 
 export default function Home() {
@@ -91,14 +93,75 @@ export default function Home() {
   useEffect(() => {
     const fetchUserCount = async () => {
       try {
-        // Ottieni la lista degli utenti da Authentication
-        const usersCount = 5; // Per ora impostiamo manualmente il numero di utenti che sappiamo esserci
-        animateCount(0, usersCount, 2000);
+        console.log("Inizio recupero conteggio utenti...");
+        // Aggiungiamo un timestamp per evitare la cache del browser
+        const response = await fetch('/api/user-count?t=' + Date.now());
+        
+        console.log("Risposta API ricevuta:", response.status);
+        
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => "");
+          console.error(`Risposta del server non valida: ${response.status}`, errorText);
+          throw new Error(`Risposta del server non valida: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log("Risposta API conteggio utenti:", data);
+        
+        if (data.success) {
+          // Anima il conteggio solo se abbiamo un valore valido
+          if (typeof data.count === 'number' && !isNaN(data.count)) {
+            animateCount(0, data.count, 2000);
+            
+            // Opzionale: aggiorna anche il conteggio nel database per riferimento futuro
+            try {
+              const usersCountRef = ref(db, 'metadata/userCount');
+              await set(usersCountRef, data.count);
+            } catch (dbError) {
+              console.error("Errore nel salvataggio del conteggio su DB:", dbError);
+            }
+          } else {
+            console.error("Conteggio utenti non valido:", data.count);
+            fallbackToDefaultCount();
+          }
+        } else {
+          console.error("Errore API:", data.error, data.message || "Nessun messaggio di errore");
+          fallbackToDBCount();
+        }
       } catch (error) {
         console.error("Errore nel recupero del conteggio utenti:", error);
+        fallbackToDBCount();
       }
     };
 
+    // Funzione per il fallback al conteggio dal database
+    const fallbackToDBCount = async () => {
+      try {
+        const usersCountRef = ref(db, 'metadata/userCount');
+        const snapshot = await get(usersCountRef);
+        
+        if (snapshot.exists() && typeof snapshot.val() === 'number') {
+          console.log("Recuperato conteggio dal database:", snapshot.val());
+          animateCount(0, snapshot.val(), 2000);
+        } else {
+          fallbackToDefaultCount();
+        }
+      } catch (dbError) {
+        console.error("Errore recupero conteggio dal DB:", dbError);
+        fallbackToDefaultCount();
+      }
+    };
+
+    // Funzione per il fallback a un valore predefinito
+    const fallbackToDefaultCount = () => {
+      console.log("Utilizzo conteggio utenti predefinito");
+      animateCount(0, 15, 2000);  // Mostra subito un numero, anche prima di tentare la chiamata API
+    };
+
+    // Per ora, mostriamo sempre un valore predefinito
+    animateCount(0, 15, 2000);  // Mostra subito un numero, anche prima di tentare la chiamata API
+    
+    // Tentiamo comunque di ottenere il numero reale
     fetchUserCount();
 
     return () => {
