@@ -1,13 +1,12 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback } from "react"
 import Image from "next/image"
 import { ref, get, update, increment } from "firebase/database"
 import { db, auth } from "../../firebase"
 import { FiHeart, FiShare2, FiEye, FiClock, FiArrowLeft, FiLock } from "react-icons/fi"
 import Link from "next/link"
 import { useParams } from "next/navigation"
-import { QRCodeSVG } from 'qrcode.react'
 
 interface ArticleData {
   uuid: string
@@ -44,11 +43,23 @@ export default function Article() {
   const [hasViewed, setHasViewed] = useState(false)
   const [showShareModal, setShowShareModal] = useState(false)
   const [articleUrl, setArticleUrl] = useState('')
-  const qrRef = useRef<HTMLDivElement>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      setUser(user)
+    const unsubscribe = auth.onAuthStateChanged((currentUser) => {
+      setUser(currentUser)
+      
+      // Verifica se l'utente è un amministratore
+      const adminEmails = [
+        process.env.NEXT_PUBLIC_ADMIN_EMAIL_1,
+        process.env.NEXT_PUBLIC_ADMIN_EMAIL_2,
+        process.env.NEXT_PUBLIC_ADMIN_EMAIL_3,
+        process.env.NEXT_PUBLIC_ADMIN_EMAIL_4
+      ]
+      
+      setIsAdmin(
+        currentUser?.email ? adminEmails.includes(currentUser.email) : false
+      )
     })
 
     return () => unsubscribe()
@@ -167,76 +178,41 @@ export default function Article() {
 
   const handleShare = async () => {
     try {
+      // Copia il link negli appunti (funziona per tutti)
       await navigator.clipboard.writeText(articleUrl)
       
-      // Prima mostra il modal, poi aggiorna le statistiche
-      setShowShareModal(true)
+      // Per gli admin, mostra il modal avanzato
+      if (isAdmin) {
+        setShowShareModal(true)
+      } else {
+        // Per utenti normali o non autenticati, mostra solo messaggio di link copiato
+        showMessage('Link copiato negli appunti!')
+      }
       
-      // Aggiorna le statistiche di condivisione
-      const articleRef = ref(db, `articoli/${params.id}`)
-      await update(articleRef, {
-        shared: increment(1)
-      })
-      
-      setArticle(prev => prev ? {...prev, shared: (prev.shared || 0) + 1} : null)
-      showMessage('Link copiato negli appunti!')
+      // Aggiorna le statistiche di condivisione solo se l'utente è autenticato
+      if (user) {
+        try {
+          const articleRef = ref(db, `articoli/${params.id}`)
+          await update(articleRef, {
+            shared: increment(1)
+          })
+          
+          setArticle(prev => prev ? {...prev, shared: (prev.shared || 0) + 1} : null)
+        } catch (dbError) {
+          console.error("Errore nell'aggiornamento delle statistiche di condivisione:", dbError)
+          // Non mostriamo errori all'utente, l'operazione principale (copia link) è già riuscita
+        }
+      } else {
+        // Per gli utenti non autenticati, aggiorniamo solo l'interfaccia utente localmente
+        // senza scrivere nel database
+        setArticle(prev => prev ? {...prev, shared: (prev.shared || 0) + 1} : null)
+      }
     } catch (error) {
       console.error("Errore nella condivisione:", error)
       showMessage("Errore nella condivisione")
     }
   }
 
-  // Modifica la funzione downloadQR per gestire meglio il download
-  const downloadQR = () => {
-    try {
-      if (!qrRef.current) return
-
-      // Trova il primo elemento svg nel qrRef
-      const svg = qrRef.current.querySelector('svg')
-      if (!svg) {
-        console.error('SVG non trovato')
-        return
-      }
-
-      // Crea un canvas
-      const canvas = document.createElement('canvas')
-      const ctx = canvas.getContext('2d')
-      if (!ctx) {
-        console.error('Impossibile ottenere il contesto 2D')
-        return
-      }
-
-      // Imposta le dimensioni del canvas
-      canvas.width = 300
-      canvas.height = 300
-
-      // Crea un'immagine dal SVG
-      const svgData = new XMLSerializer().serializeToString(svg)
-      const img = document.createElement('img')
-      
-      img.onload = () => {
-        // Disegna uno sfondo bianco
-        ctx.fillStyle = 'white'
-        ctx.fillRect(0, 0, canvas.width, canvas.height)
-        
-        // Disegna il QR code
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
-        
-        // Crea il link per il download
-        const link = document.createElement('a')
-        link.download = `qrcode-${article?.titolo?.replace(/\s+/g, '-').toLowerCase() || 'article'}.png`
-        link.href = canvas.toDataURL('image/png')
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-      }
-
-      img.src = 'data:image/svg+xml;base64,' + btoa(svgData)
-    } catch (error) {
-      console.error('Errore durante il download del QR code:', error)
-      showMessage('Errore durante il download del QR code')
-    }
-  }
 
   const getTimeAgo = (dateString: string) => {
     const date = new Date(dateString)
@@ -358,6 +334,284 @@ export default function Article() {
     });
 
     return doc.body.innerHTML;
+  };
+
+  // Aggiungi un componente semplificato per il modale di condivisione
+  const ShareModal = () => {
+    const [copied, setCopied] = useState(false);
+    const [isGenerating, setIsGenerating] = useState(false);
+    
+    const copyLink = () => {
+      navigator.clipboard.writeText(articleUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      showMessage('Link copiato negli appunti!');
+    };
+    
+    const downloadInstagramImage = async () => {
+      try {
+        setIsGenerating(true);
+        showMessage('Preparazione immagine...');
+        
+        // Creiamo un canvas direttamente
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          showMessage("Errore nella generazione dell'immagine");
+          setIsGenerating(false);
+          return;
+        }
+        
+        // Dimensioni per Instagram (formato quadrato)
+        canvas.width = 1080;
+        canvas.height = 1080;
+        
+        // Carica l'immagine dell'articolo
+        const loadImage = (src: string) => {
+          return new Promise<HTMLImageElement>((resolve, reject) => {
+            const img = document.createElement('img');
+            img.crossOrigin = "anonymous";
+            img.onload = () => resolve(img);
+            img.onerror = reject;
+            img.src = src;
+          });
+        };
+        
+        // Ottieni un QR code come immagine da un API gratuito
+        const getQRCodeImage = async (url: string) => {
+          // Encodiamo l'URL per l'API
+          const encodedUrl = encodeURIComponent(url);
+          
+          // Utilizziamo QR Server che permette di personalizzare il colore
+          const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?data=${encodedUrl}&size=250x250&color=F59E0B&bgcolor=FFFFFF`;
+          
+          try {
+            return await loadImage(qrImageUrl);
+          } catch (error) {
+            console.error('Errore nel caricamento del QR code:', error);
+            return null;
+          }
+        };
+        
+        // Sfondo nero iniziale
+        ctx.fillStyle = '#1e1e1e';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Carica l'immagine dell'articolo per lo sfondo
+        let bgImage = null;
+        try {
+          bgImage = await loadImage(article?.immagine || '');
+          
+          // Disegna l'immagine di sfondo
+          ctx.drawImage(bgImage, 0, 0, canvas.width, canvas.height);
+          
+          // Overlay scuro per leggibilità
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        } catch {
+          console.log('Impossibile caricare l\'immagine di sfondo, uso sfondo scuro standard');
+          // Mantieni il background nero se l'immagine non può essere caricata
+        }
+        
+        // Logo "PAXMAN NEWS" in alto
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 60px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('PAXMAN NEWS', canvas.width / 2, 100);
+        
+        // Data sotto il logo
+        const formattedDate = new Date(article?.creazione || Date.now()).toLocaleDateString('it-IT', {
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric'
+        });
+        ctx.font = 'italic 28px Arial';
+        ctx.fillText(formattedDate, canvas.width / 2, 150);
+        
+        // Tag dell'articolo (se presente)
+        if (article?.tag) {
+          // Sfondo per il tag
+          ctx.fillStyle = '#F59E0B'; // Arancione
+          const tagWidth = ctx.measureText(article.tag).width + 40;
+          const tagX = canvas.width / 2 - tagWidth / 2;
+          ctx.fillRect(tagX, 200, tagWidth, 50);
+          
+          // Testo del tag
+          ctx.fillStyle = '#000000';
+          ctx.font = 'bold 30px Arial';
+          ctx.fillText(article.tag, canvas.width / 2, 235);
+        }
+        
+        // Funzione per testo multilinea
+        const drawWrappedText = (text: string, x: number, y: number, maxWidth: number, lineHeight: number) => {
+          const words = text.split(' ');
+          let line = '';
+          let lineCount = 0;
+          
+          for (let n = 0; n < words.length; n++) {
+            const testLine = line + words[n] + ' ';
+            const metrics = ctx.measureText(testLine);
+            const testWidth = metrics.width;
+            
+            if (testWidth > maxWidth && n > 0) {
+              ctx.fillText(line, x, y + (lineCount * lineHeight));
+              line = words[n] + ' ';
+              lineCount++;
+            } else {
+              line = testLine;
+            }
+          }
+          
+          ctx.fillText(line, x, y + (lineCount * lineHeight));
+          return lineCount + 1;
+        };
+        
+        // Titolo dell'articolo (centrato)
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 48px Arial';
+        const titleY = article?.tag ? 300 : 250;
+        const titleLineCount = drawWrappedText(
+          article?.titolo || 'Articolo',
+          canvas.width / 2,
+          titleY,
+          canvas.width - 100,
+          60
+        );
+        
+        // Autore
+        ctx.font = 'italic 36px Arial';
+        ctx.fillText(`di ${article?.autore || 'Autore'}`, canvas.width / 2, titleY + (titleLineCount * 60) + 20);
+        
+        // Area per il QR code
+        const qrSize = 250;
+        const qrX = canvas.width / 2 - qrSize / 2;
+        const qrY = canvas.height - qrSize - 150;
+        
+        // Sfondo bianco per il QR code
+        ctx.fillStyle = 'white';
+        ctx.fillRect(qrX - 10, qrY - 10, qrSize + 20, qrSize + 20);
+        
+        // Carica e disegna il QR code
+        const qrImage = await getQRCodeImage(articleUrl);
+        if (qrImage) {
+          // Disegna il QR code
+          ctx.drawImage(qrImage, qrX, qrY, qrSize, qrSize);
+        } else {
+          // Fallback in caso di errore - disegna un segnaposto
+          ctx.fillStyle = '#F59E0B';
+          ctx.textAlign = 'center';
+          ctx.font = 'bold 24px Arial';
+          ctx.fillText('Scannerizza il QR code sul sito', canvas.width / 2, qrY + qrSize / 2);
+          
+          // Disegna un bordo arancione attorno al segnaposto
+          ctx.strokeStyle = '#F59E0B';
+          ctx.lineWidth = 8;
+          ctx.strokeRect(qrX, qrY, qrSize, qrSize);
+        }
+        
+        // Testo sotto il QR code
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '32px Arial';
+        ctx.fillText('Scannerizza per leggere l\'articolo completo', canvas.width / 2, canvas.height - 80);
+        
+        // Converti in immagine e scarica
+        const link = document.createElement('a');
+        link.download = `paxman-news-${article?.titolo?.replace(/\s+/g, '-').toLowerCase() || 'article'}.png`;
+        link.href = canvas.toDataURL('image/png');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        showMessage('Immagine scaricata con successo!');
+        setIsGenerating(false);
+      } catch (error) {
+        console.error("Errore nella generazione dell'immagine:", error);
+        showMessage("Errore nella generazione dell'immagine");
+        setIsGenerating(false);
+      }
+    };
+    
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+        <div className="bg-zinc-800 rounded-2xl p-6 max-w-md w-full mx-auto shadow-2xl border border-zinc-700/50">
+          {/* Header */}
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-2xl font-bold text-white">Condividi articolo</h3>
+            <button 
+              onClick={() => setShowShareModal(false)}
+              className="text-zinc-400 hover:text-white transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          
+          {/* Nota informativa */}
+          <p className="text-zinc-400 text-sm mb-6">
+            Puoi copiare il link dell&apos;articolo o scaricare un&apos;immagine ottimizzata per Instagram con QR code.
+          </p>
+          
+          {/* Pulsanti principali - rimuovi i pulsanti social e mantieni solo questi due */}
+          <div className="space-y-4">
+            {/* Pulsante Copia Link */}
+            <button
+              onClick={copyLink}
+              className={`w-full py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-colors duration-300 ${
+                copied ? 'bg-green-600 text-white' : 'bg-zinc-700 hover:bg-zinc-600 text-zinc-200'
+              }`}
+            >
+              {copied ? (
+                <>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Link copiato
+                </>
+              ) : (
+                <>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                  </svg>
+                  Copia link articolo
+                </>
+              )}
+            </button>
+            
+            {/* Pulsante Instagram */}
+            <button
+              onClick={downloadInstagramImage}
+              disabled={isGenerating}
+              className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:opacity-90 text-white py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-opacity duration-300 disabled:opacity-50"
+            >
+              {isGenerating ? (
+                <>
+                  <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Generazione in corso...
+                </>
+              ) : (
+                <>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  Scarica per Instagram
+                </>
+              )}
+            </button>
+          </div>
+          
+          {/* Nota informativa sul QR code */}
+          <div className="mt-6 p-3 bg-zinc-700/30 rounded-lg">
+            <p className="text-zinc-300 text-xs text-center">
+              L&apos;immagine scaricata includerà un QR code arancione che rimanda a questo articolo.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -627,66 +881,8 @@ export default function Article() {
         </article>
       </div>
 
-      {/* Modal per la condivisione */}
-      {showShareModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-          <div className="relative bg-zinc-800 rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl border border-zinc-700">
-            <button 
-              onClick={() => setShowShareModal(false)}
-              className="absolute top-3 right-3 text-zinc-400 hover:text-white"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-            
-            <h3 className="text-xl font-semibold text-white mb-6">Condividi articolo</h3>
-            
-            <div className="flex flex-col items-center mb-6">
-              <div ref={qrRef} className="bg-white p-4 rounded-lg mb-4">
-                <QRCodeSVG 
-                  value={articleUrl} 
-                  size={200}
-                  level="H"
-                  includeMargin={false}
-                  fgColor="#000000"
-                  bgColor="#FFFFFF"
-                />
-              </div>
-              
-              <button
-                onClick={downloadQR}
-                className="bg-amber-500 hover:bg-amber-600 text-white py-2 px-4 rounded-lg flex items-center transition-colors"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                </svg>
-                Scarica QR code
-              </button>
-            </div>
-            
-            <div className="flex items-center gap-2 bg-zinc-700 p-3 rounded-lg">
-              <input
-                type="text"
-                value={articleUrl}
-                readOnly
-                className="flex-1 bg-transparent text-zinc-200 text-sm outline-none"
-              />
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(articleUrl);
-                  showMessage('Link copiato!');
-                }}
-                className="bg-zinc-600 hover:bg-zinc-500 text-zinc-200 p-1.5 rounded-lg transition-colors"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-                </svg>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Modal per la condivisione (solo per admin) */}
+      {showShareModal && <ShareModal />}
     </main>
   )
 } 

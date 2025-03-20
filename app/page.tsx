@@ -114,11 +114,14 @@ export default function Home() {
             animateCount(0, data.count, 2000);
             
             // Opzionale: aggiorna anche il conteggio nel database per riferimento futuro
-            try {
-              const usersCountRef = ref(db, 'metadata/userCount');
-              await set(usersCountRef, data.count);
-            } catch (dbError) {
-              console.error("Errore nel salvataggio del conteggio su DB:", dbError);
+            // Solo gli admin possono scrivere sul database
+            if (isAdmin) {
+              try {
+                const usersCountRef = ref(db, 'metadata/userCount');
+                await set(usersCountRef, data.count);
+              } catch (dbError) {
+                console.error("Errore nel salvataggio del conteggio su DB:", dbError);
+              }
             }
           } else {
             console.error("Conteggio utenti non valido:", data.count);
@@ -136,6 +139,7 @@ export default function Home() {
 
     // Funzione per il fallback al conteggio dal database
     const fallbackToDBCount = async () => {
+      // Rimuoviamo il controllo sull'utente, permettendo a tutti di leggere il conteggio
       try {
         const usersCountRef = ref(db, 'metadata/userCount');
         const snapshot = await get(usersCountRef);
