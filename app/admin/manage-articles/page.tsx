@@ -43,19 +43,14 @@ export default function ManageArticlesPage() {
   // Verifica se l'utente è autorizzato
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      const adminEmails = JSON.parse(process.env.NEXT_PUBLIC_ADMIN_EMAILS || "[]")
       const superiorEmails = JSON.parse(process.env.NEXT_PUBLIC_SUPERIOR_EMAILS || "[]")
       
-      if (user && adminEmails.includes(user.email || '')) {
+      if (user && superiorEmails.includes(user.email || '')) {
         setIsAdmin(true)
-        
-        // Verifica se l'utente è anche un superiore
-        if (superiorEmails.includes(user.email || '')) {
-          setIsSuperior(true)
-        }
-        
+        setIsSuperior(true)
         fetchArticles()
       } else {
+        // Reindirizza alla home page se non è un utente SUPERIOR
         router.push('/')
       }
       setLoading(false)
