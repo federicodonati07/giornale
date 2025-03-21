@@ -27,6 +27,7 @@ interface ArticleData {
   isPrivate: boolean
   additionalLinks?: { label: string; url: string }[]
   status?: string
+  scheduleDate?: string
 }
 
 export default function ManageArticlesPage() {
@@ -209,12 +210,15 @@ export default function ManageArticlesPage() {
     }
   }
 
-  // Filtra gli articoli in base al termine di ricerca
+  // Filtra gli articoli in base al termine di ricerca e status
   const filteredArticles = articles.filter(article => 
-    article.titolo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    article.autore.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    article.tag.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    article.contenuto.toLowerCase().includes(searchTerm.toLowerCase())
+    // Filtra per termine di ricerca
+    (article.titolo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+     article.autore.toLowerCase().includes(searchTerm.toLowerCase()) ||
+     article.tag.toLowerCase().includes(searchTerm.toLowerCase()) ||
+     article.contenuto.toLowerCase().includes(searchTerm.toLowerCase())) &&
+    // Nascondi gli articoli con status 'revision'
+    article.status !== 'revision'
   ).sort(sortArticles)
 
   // Funzione per ottenere un estratto del contenuto
@@ -552,6 +556,13 @@ export default function ManageArticlesPage() {
                       <div className="text-zinc-800 dark:text-zinc-200">
                         {formatDate(article.creazione)}
                       </div>
+                      {article.status === 'scheduled' && article.scheduleDate && (
+                        <div className="mt-1 flex items-center">
+                          <span className="px-2 py-0.5 text-xs font-medium bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200 rounded-full">
+                            Programmato: {formatDate(article.scheduleDate)}
+                          </span>
+                        </div>
+                      )}
                     </td>
                     
                     {/* Tag */}
@@ -589,6 +600,16 @@ export default function ManageArticlesPage() {
                     {/* Azioni */}
                     <td className="p-3">
                       <div className="flex justify-center gap-2">
+                        {article.status === 'scheduled' && (
+                          <button 
+                            className="p-2 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-purple-100 dark:hover:bg-purple-900/30 hover:text-purple-600 dark:hover:text-purple-400 transition-colors duration-200 cursor-pointer"
+                            title="Programmato per pubblicazione"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          </button>
+                        )}
                         {isSuperior ? (
                           <button 
                             className="p-2 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-red-100 dark:hover:bg-red-900/30 hover:text-red-600 dark:hover:text-red-400 transition-colors duration-200 cursor-pointer"

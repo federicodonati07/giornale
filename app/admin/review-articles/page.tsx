@@ -25,7 +25,8 @@ interface ArticleData {
   view: number
   partecipanti?: string
   isPrivate: boolean
-  status: string // 'revision', 'accepted', 'rejected'
+  status: string // 'revision', 'accepted', 'rejected', 'scheduled'
+  scheduleDate?: string // Data per la pubblicazione programmata
   additionalLinks?: { label: string; url: string }[]
 }
 
@@ -39,6 +40,11 @@ export default function ReviewArticlesPage() {
   const [confirmAction, setConfirmAction] = useState<{ uuid: string, action: 'reject' | 'accept' } | null>(null)
   const [selectedArticle, setSelectedArticle] = useState<ArticleData | null>(null)
   const [showArticleModal, setShowArticleModal] = useState(false)
+  const [showScheduleModal, setShowScheduleModal] = useState(false)
+  const [scheduleDate, setScheduleDate] = useState<string>("")
+  const [scheduleTime, setScheduleTime] = useState<string>("")
+  const [articleToSchedule, setArticleToSchedule] = useState<string>("")
+  const [scheduleError, setScheduleError] = useState<string>("")
   
   // Refs per gli elementi con effetti parallax
   const headerRef = useRef<HTMLDivElement>(null)
@@ -50,6 +56,11 @@ export default function ReviewArticlesPage() {
   const headerScale = useTransform(scrollY, [0, 100], [1, 0.95])
   const headerY = useTransform(scrollY, [0, 100], [0, -15])
   const contentY = useTransform(scrollY, [0, 300], [0, -30])
+
+  // Ottieni la data corrente in formato YYYY-MM-DD
+  const today = new Date().toISOString().split('T')[0]
+  const currentYear = new Date().getFullYear()
+  const maxDate = `${currentYear}-12-31` // Fine dell'anno corrente
 
   // Verifica se l'utente è autorizzato
   useEffect(() => {
@@ -221,6 +232,74 @@ export default function ReviewArticlesPage() {
     return content;
   };
 
+  // Funzione per programmare un articolo
+  const scheduleArticle = async (uuid: string, scheduleDateTime: string) => {
+    try {
+      const articleRef = ref(db, `articoli/${uuid}`);
+      
+      // Utilizziamo la data ISO per garantire compatibilità
+      await update(articleRef, {
+        status: 'scheduled',
+        scheduleDate: scheduleDateTime
+      });
+      
+      // Aggiorna la lista degli articoli
+      setArticles(articles.filter(article => article.uuid !== uuid));
+      
+      // Notifica all'utente
+      const scheduledDate = new Date(scheduleDateTime);
+      const formattedDate = scheduledDate.toLocaleString('it-IT', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      
+      showNotification("success", `Articolo programmato per il ${formattedDate}`);
+      
+      // Resetta lo stato
+      setShowScheduleModal(false);
+      setArticleToSchedule("");
+      setScheduleDate("");
+      setScheduleTime("");
+      setScheduleError("");
+    } catch (error) {
+      console.error("Errore durante la programmazione:", error);
+      showNotification("error", "Errore durante la programmazione dell'articolo");
+    }
+  };
+
+  // Funzione per gestire la programmazione con validazione
+  const handleSchedule = () => {
+    setScheduleError("");
+    
+    // Validazione della data
+    if (!scheduleDate) {
+      setScheduleError("Seleziona una data valida");
+      return;
+    }
+    
+    // Validazione dell'ora
+    if (!scheduleTime) {
+      setScheduleError("Seleziona un'ora valida");
+      return;
+    }
+    
+    // Validazione data non nel passato
+    const selectedDateTime = new Date(`${scheduleDate}T${scheduleTime}`);
+    const now = new Date();
+    
+    if (selectedDateTime <= now) {
+      setScheduleError("La data e l'ora selezionate devono essere future");
+      return;
+    }
+    
+    // Combina data e ora in un formato ISO
+    const scheduleDateTime = selectedDateTime.toISOString();
+    scheduleArticle(articleToSchedule, scheduleDateTime);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-zinc-100 to-zinc-200/90 dark:from-zinc-900 dark:to-zinc-800">
@@ -252,7 +331,7 @@ export default function ReviewArticlesPage() {
         </div>
       )}
       
-      {/* Popup di conferma azione */}
+      {/* Popup di conferma azione - modifichiamo l'ordine dei pulsanti */}
       {confirmAction && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-zinc-800 rounded-2xl shadow-2xl w-full max-w-md p-6">
@@ -276,36 +355,199 @@ export default function ReviewArticlesPage() {
               <p className="text-zinc-600 dark:text-zinc-300">
                 {confirmAction.action === 'reject' 
                   ? 'Sei sicuro di voler rifiutare e eliminare questo articolo? Questa azione non può essere annullata.' 
-                  : 'Sei sicuro di voler approvare questo articolo? Sarà pubblicato immediatamente.'}
+                  : 'Scegli come vuoi pubblicare questo articolo.'}
               </p>
             </div>
             
-            <div className="flex gap-3 justify-center">
+            <div className="flex flex-wrap gap-3 justify-center">
+              {/* Riordino dei pulsanti come richiesto */}
               <button
                 onClick={() => setConfirmAction(null)}
                 className="px-4 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-700 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-colors duration-200 cursor-pointer"
               >
                 Annulla
               </button>
+              
+              {confirmAction.action === 'reject' ? (
+                <button
+                  onClick={() => rejectArticle(confirmAction.uuid)}
+                  className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white transition-colors duration-200 cursor-pointer"
+                >
+                  Rifiuta
+                </button>
+              ) : (
+                <>
+                  {/* Prima il pulsante di programmazione, poi quello di pubblicazione immediata */}
+                  <button
+                    onClick={() => {
+                      setArticleToSchedule(confirmAction.uuid);
+                      setShowScheduleModal(true);
+                      setConfirmAction(null);
+                    }}
+                    className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-colors duration-200 cursor-pointer"
+                  >
+                    Programma
+                  </button>
+                  <button
+                    onClick={() => acceptArticle(confirmAction.uuid)}
+                    className="px-4 py-2 rounded-xl bg-green-600 hover:bg-green-700 text-white transition-colors duration-200 cursor-pointer"
+                  >
+                    Pubblica ora
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal per la programmazione dell'articolo con validazione */}
+      {showScheduleModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-zinc-800 rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <div className="text-center mb-6">
+              <div className="mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4 bg-blue-100 dark:bg-blue-900/30">
+                <svg className="h-6 w-6 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <h2 className="text-xl font-serif font-bold text-zinc-900 dark:text-zinc-50 mb-2">
+                Programma pubblicazione
+              </h2>
+              <p className="text-zinc-600 dark:text-zinc-300">
+                Seleziona data e ora per la pubblicazione dell'articolo
+              </p>
+            </div>
+            
+            {/* Mostro eventuali errori di validazione */}
+            {scheduleError && (
+              <div className="mb-4 p-3 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg text-sm">
+                {scheduleError}
+              </div>
+            )}
+            
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                  Data di pubblicazione <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <input 
+                    type="date" 
+                    value={scheduleDate}
+                    onChange={(e) => setScheduleDate(e.target.value)}
+                    className="w-full p-3 pl-10 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none cursor-pointer hover:border-blue-400"
+                    min={today}
+                    max={maxDate}
+                    required
+                  />
+                  <div className="absolute left-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
+                    <svg className="h-5 w-5 text-blue-500 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                </div>
+                <p className="mt-1.5 text-xs text-zinc-500 dark:text-zinc-400 ml-1">
+                  Seleziona una data nell'anno corrente
+                </p>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                  Ora di pubblicazione <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <input 
+                    type="time" 
+                    value={scheduleTime}
+                    onChange={(e) => setScheduleTime(e.target.value)}
+                    className="w-full p-3 pl-10 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none cursor-pointer hover:border-blue-400"
+                    required
+                  />
+                  <div className="absolute left-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
+                    <svg className="h-5 w-5 text-blue-500 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                </div>
+                <div className="mt-1.5 flex items-center justify-between">
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 ml-1">
+                    Formato 24 ore (es. 14:30)
+                  </p>
+                  <div className="flex gap-1.5">
+                    <button 
+                      type="button" 
+                      onClick={() => setScheduleTime("09:00")}
+                      className="px-2 py-1 text-xs rounded-lg bg-white/20 dark:bg-zinc-700/50 text-blue-500 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/20 transition-colors"
+                    >
+                      09:00
+                    </button>
+                    <button 
+                      type="button" 
+                      onClick={() => setScheduleTime("15:00")}
+                      className="px-2 py-1 text-xs rounded-lg bg-white/20 dark:bg-zinc-700/50 text-blue-500 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/20 transition-colors"
+                    >
+                      15:00
+                    </button>
+                    <button 
+                      type="button" 
+                      onClick={() => setScheduleTime("20:00")}
+                      className="px-2 py-1 text-xs rounded-lg bg-white/20 dark:bg-zinc-700/50 text-blue-500 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/20 transition-colors"
+                    >
+                      20:00
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Anteprima data e ora selezionate */}
+              {scheduleDate && scheduleTime && (
+                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800/50">
+                  <p className="text-sm text-blue-800 dark:text-blue-300 font-medium text-center">
+                    L'articolo sarà pubblicato il:
+                  </p>
+                  <p className="text-center text-blue-600 dark:text-blue-400 mt-1 font-bold">
+                    {new Date(`${scheduleDate}T${scheduleTime}`).toLocaleString('it-IT', {
+                      weekday: 'long',
+                      day: 'numeric',
+                      month: 'long',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </p>
+                </div>
+              )}
+            </div>
+            
+            <div className="flex gap-3 justify-center">
               <button
-                onClick={() => confirmAction.action === 'reject' 
-                  ? rejectArticle(confirmAction.uuid) 
-                  : acceptArticle(confirmAction.uuid)
-                }
-                className={`px-4 py-2 rounded-xl text-white transition-colors duration-200 cursor-pointer ${
-                  confirmAction.action === 'reject'
-                    ? 'bg-red-600 hover:bg-red-700'
-                    : 'bg-green-600 hover:bg-green-700'
-                }`}
+                onClick={() => {
+                  setShowScheduleModal(false);
+                  setArticleToSchedule("");
+                  setScheduleDate("");
+                  setScheduleTime("");
+                  setScheduleError("");
+                }}
+                className="px-4 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-700 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-colors duration-200 cursor-pointer"
               >
-                {confirmAction.action === 'reject' ? 'Rifiuta' : 'Accetta'}
+                Annulla
+              </button>
+              <button
+                onClick={handleSchedule}
+                className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-colors duration-200 cursor-pointer flex items-center gap-2"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Conferma programmazione
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Modal per visualizzare l'articolo completo */}
+      {/* Modal per visualizzare l'articolo completo - rimuovo il pulsante di schedule */}
       {showArticleModal && selectedArticle && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-0 sm:p-8 overflow-hidden">
           <div className="bg-white dark:bg-zinc-900 w-full h-full sm:h-auto sm:max-h-[90vh] sm:w-auto sm:max-w-4xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col">
@@ -324,7 +566,7 @@ export default function ReviewArticlesPage() {
               </div>
               
               <div className="flex items-center gap-3">
-                {/* Pulsanti azione per articoli in revisione */}
+                {/* Pulsanti azione per articoli in revisione - rimuovo il pulsante Schedule */}
                 <button
                   onClick={() => {
                     setConfirmAction({ uuid: selectedArticle.uuid, action: 'reject' })
@@ -624,18 +866,6 @@ export default function ReviewArticlesPage() {
                           title="Approva articolo"
                         >
                           <FiCheck className="h-5 w-5" />
-                        </motion.button>
-                        <motion.button
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.9 }}
-                          onClick={() => {
-                            setSelectedArticle(article)
-                            setShowArticleModal(true)
-                          }}
-                          className="p-2 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-colors duration-200 cursor-pointer"
-                          title="Visualizza articolo"
-                        >
-                          <FiMaximize2 className="h-5 w-5" />
                         </motion.button>
                       </div>
                     </div>

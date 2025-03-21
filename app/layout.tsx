@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Inter, Merriweather } from 'next/font/google'
 import { Montserrat } from 'next/font/google'
+import ScheduledArticlesChecker from "./components/ScheduledArticlesChecker"
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -52,6 +53,7 @@ export default function RootLayout({
         <meta name="theme-color" content="#27272a" />
       </head>
       <body className="bg-zinc-900">
+        <ScheduledArticlesChecker />
         {children}
       </body>
     </html>

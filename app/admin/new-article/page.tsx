@@ -103,8 +103,9 @@ export default function NewArticlePage() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       const adminEmails = JSON.parse(process.env.NEXT_PUBLIC_ADMIN_EMAILS || "[]")
+      const superiorEmails = JSON.parse(process.env.NEXT_PUBLIC_SUPERIOR_EMAILS || "[]")
       
-      if (user && adminEmails.includes(user.email || '')) {
+      if (user && (adminEmails.includes(user.email || '') || superiorEmails.includes(user.email || ''))) {
         setIsAdmin(true)
         setAutore(user.displayName || user.email || '')
       } else {
@@ -289,8 +290,8 @@ export default function NewArticlePage() {
         
         // Attendi un breve momento prima di reindirizzare per permettere all'utente di vedere la notifica
         setTimeout(() => {
-          // Reindirizza alla pagina di gestione articoli
-          router.push("/admin/manage-articles")
+          // Reindirizza alla pagina di revisione articoli invece che a quella di gestione
+          router.push("/admin/review-articles")
         }, 1500)
       } catch (dbError) {
         console.error("Errore durante il salvataggio nel database:", dbError)

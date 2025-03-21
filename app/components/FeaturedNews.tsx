@@ -111,6 +111,15 @@ export function FeaturedNews() {
     }
   };
 
+  // Check if article is new (less than 24 hours)
+  const isNewArticle = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffHours = diffMs / (1000 * 60 * 60);
+    return diffHours < 24;
+  };
+
   return (
     <section className="w-full py-4 sm:py-8">
       <style jsx global>{`
@@ -214,6 +223,13 @@ export function FeaturedNews() {
                         {tag.trim() || 'GENERALE'}
                       </span>
                     ))}
+                    
+                    {/* "NEW" tag if article is recent */}
+                    {isNewArticle(article.creazione) && (
+                      <span className="px-3 py-1 text-[10px] font-medium bg-green-500 text-white rounded-full shadow-lg backdrop-blur-md transition-transform duration-300 group-hover:scale-105">
+                        NUOVO
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -298,6 +314,13 @@ export function FeaturedNews() {
                           {tag.trim() || 'GENERALE'}
                         </span>
                       ))}
+                      
+                      {/* "NEW" tag for mobile */}
+                      {isNewArticle(article.creazione) && (
+                        <span className="px-2 py-0.5 text-[10px] font-medium bg-green-500 text-white rounded-full">
+                          NUOVO
+                        </span>
+                      )}
                     </div>
 
                     {/* Titolo */}

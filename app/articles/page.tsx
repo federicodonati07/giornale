@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Image from "next/image"
-import { ref, get} from "firebase/database"
+import { ref, get, update } from "firebase/database"
 import { db } from "../firebase"
 import { FiHeart, FiShare2, FiEye, FiClock, FiArrowLeft } from "react-icons/fi"
 import Link from "next/link"
@@ -94,6 +94,53 @@ export default function Articles() {
     }
   }, []);
 
+  // Aggiungi una funzione per verificare e pubblicare gli articoli programmati
+  useEffect(() => {
+    const checkScheduledArticles = async () => {
+      try {
+        const articlesRef = ref(db, 'articoli');
+        const snapshot = await get(articlesRef);
+        
+        if (snapshot.exists()) {
+          const now = new Date();
+          const updates: Record<string, unknown> = {};
+          let hasUpdates = false;
+          
+          snapshot.forEach((childSnapshot) => {
+            const article = childSnapshot.val();
+            const articleId = childSnapshot.key;
+            
+            // Verifica se è un articolo programmato e se la data di pubblicazione è stata raggiunta
+            if (article.status === 'scheduled' && article.scheduleDate) {
+              const scheduleDate = new Date(article.scheduleDate);
+              
+              if (scheduleDate <= now) {
+                // La data di pubblicazione è stata raggiunta, aggiorna lo stato
+                updates[`${articleId}/status`] = 'accepted';
+                updates[`${articleId}/scheduleDate`] = null; // Rimuovi la data di programmazione
+                hasUpdates = true;
+              }
+            }
+          });
+          
+          // Aggiorna il database solo se ci sono modifiche
+          if (hasUpdates) {
+            await update(ref(db), { 'articoli': updates });
+            console.log('Articoli programmati aggiornati con successo');
+            
+            // Aggiorna la lista degli articoli dopo l'aggiornamento
+            window.location.reload(); // Ricarica la pagina per vedere gli articoli aggiornati
+          }
+        }
+      } catch (error) {
+        console.error('Errore durante la verifica degli articoli programmati:', error);
+      }
+    };
+    
+    // Esegui la verifica al caricamento della pagina
+    checkScheduledArticles();
+  }, []); // Esegui solo al montaggio del componente
+
   // Funzione per estrarre un excerpt dal contenuto
   const getExcerpt = (content: string, maxLength: number = 180) => {
     if (typeof document === 'undefined') return content.substring(0, maxLength) + '...'
@@ -127,6 +174,15 @@ export default function Articles() {
       return 'adesso'
     }
   }
+
+  // Check if article is new (less than 24 hours)
+  const isNewArticle = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffHours = diffMs / (1000 * 60 * 60);
+    return diffHours < 24;
+  };
 
   // Funzione per gestire il toggle dei tag
   const toggleTag = (tag: string) => {
@@ -407,7 +463,7 @@ export default function Articles() {
                     </div>
                     
                     {/* Skeleton per il footer */}
-                    <div className="mt-auto flex flex-wrap items-center justify-between gap-4 pt-4">
+                    <div className="mt-auto flex flex-wrap items-center justify-between gap-4">
                       <div className="flex items-center gap-4">
                         <div className="h-4 w-24 bg-zinc-200/20 dark:bg-zinc-700/20 rounded-full animate-pulse"></div>
                         <div className="h-4 w-20 bg-zinc-200/20 dark:bg-zinc-700/20 rounded-full animate-pulse"></div>
@@ -469,6 +525,18 @@ export default function Articles() {
                             {tag.trim() || 'GENERALE'}
                           </motion.span>
                         ))}
+                        
+                        {/* "NEW" tag if article is recent */}
+                        {isNewArticle(article.creazione) && (
+                          <motion.span 
+                            initial={{ opacity: 0, scale: 0.8 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ duration: 0.3, delay: 0.3 + (index * 0.1) }}
+                            className="px-2.5 py-1 text-[10px] font-medium bg-green-500 text-white rounded-full"
+                          >
+                            NUOVO
+                          </motion.span>
+                        )}
                       </div>
 
                       {/* Titolo */}

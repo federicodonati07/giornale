@@ -7,7 +7,7 @@ import { FeaturedNews } from "./components/FeaturedNews"
 import Link from "next/link"
 import { onAuthStateChanged, signOut, User } from "firebase/auth"
 import { auth } from "./firebase"
-import { ref, get, set } from "firebase/database"
+import { ref, get, set, update } from "firebase/database"
 import { db } from "./firebase"
 import { motion } from "framer-motion"
 
@@ -225,6 +225,60 @@ export default function Home() {
     };
   }, []);
 
+  // Aggiungi una funzione per verificare e pubblicare gli articoli programmati
+  useEffect(() => {
+    const checkScheduledArticles = async () => {
+      if (!user) return; // Solo se l'utente è autenticato
+
+      try {
+        const articlesRef = ref(db, 'articoli');
+        const snapshot = await get(articlesRef);
+        
+        if (snapshot.exists()) {
+          const now = new Date();
+          const updates: Record<string, string | null> = {};
+          let hasUpdates = false;
+          
+          snapshot.forEach((childSnapshot) => {
+            const article = childSnapshot.val();
+            const articleId = childSnapshot.key;
+            
+            // Verifica se è un articolo programmato e se la data di pubblicazione è stata raggiunta
+            if (article.status === 'scheduled' && article.scheduleDate) {
+              const scheduleDate = new Date(article.scheduleDate);
+              
+              if (scheduleDate <= now) {
+                // La data di pubblicazione è stata raggiunta, aggiorna lo stato
+                updates[`articoli/${articleId}/status`] = 'accepted';
+                updates[`articoli/${articleId}/creazione`] = article.scheduleDate; // Imposta la data di creazione alla data programmata
+                updates[`articoli/${articleId}/scheduleDate`] = null; // Rimuovi la data di programmazione
+                hasUpdates = true;
+                console.log(`Articolo programmato pubblicato: ${article.titolo}`);
+              }
+            }
+          });
+          
+          // Aggiorna il database solo se ci sono modifiche
+          if (hasUpdates) {
+            await update(ref(db), updates);
+            console.log('Articoli programmati aggiornati con successo');
+          }
+        }
+      } catch (error) {
+        console.error('Errore durante la verifica degli articoli programmati:', error);
+      }
+    };
+    
+    // Esegui subito e imposta un intervallo per verificare periodicamente
+    checkScheduledArticles();
+    
+    // Puoi anche impostare un intervallo se desideri controllare periodicamente
+    // durante l'utilizzo dell'app senza richiedere un ricaricamento della pagina
+    const interval = setInterval(checkScheduledArticles, 60000); // Controlla ogni minuto
+    
+    return () => clearInterval(interval);
+  }, [user]);
+
   return (
     <main className="min-h-screen bg-gradient-to-br from-zinc-100 to-zinc-200/90 dark:from-zinc-900 dark:to-zinc-800 overflow-x-hidden">
       {/* Stili per l'animazione del menu e animazioni personalizzate */}
@@ -280,12 +334,12 @@ export default function Home() {
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: "easeOut" }}
-        className="absolute top-4 right-4 sm:top-6 sm:right-8 z-10"
+        className="absolute top-4 right-4 sm:top-6 sm:right-8 z-[50]"
       >
         {loading ? (
           <div className="h-10 w-24 bg-white/10 animate-pulse rounded-full"></div>
         ) : user ? (
-          <div className="flex items-center gap-3 relative" ref={userMenuRef}>
+          <div className="flex items-center gap-3 relative z-[9998]" ref={userMenuRef}>
             <div 
               className="flex items-center bg-white/10 dark:bg-zinc-800/50 backdrop-blur-md rounded-full py-2 px-4 border border-white/20 cursor-pointer hover:bg-white/20 dark:hover:bg-zinc-700/60 transition-all duration-300"
               onClick={() => setShowUserMenu(!showUserMenu)}
@@ -308,7 +362,7 @@ export default function Home() {
             
             {/* Menu a tendina */}
             {showUserMenu && (
-              <div className="absolute right-0 top-12 w-48 py-2 bg-white/80 dark:bg-zinc-800/90 backdrop-blur-xl rounded-xl shadow-xl border border-white/30 dark:border-white/10 z-50 transform origin-top-right transition-all duration-300 animate-fade-in">
+              <div className="absolute right-0 top-12 w-48 py-2 bg-white/80 dark:bg-zinc-800/90 backdrop-blur-xl rounded-xl shadow-xl border border-white/30 dark:border-white/10 z-[9999] transform origin-top-right transition-all duration-300 animate-fade-in">
                 <div className="px-2">
                   <Link href="/favorites">
                     <div className="flex items-center px-3 py-2 text-sm text-zinc-800 dark:text-zinc-200 hover:bg-amber-500/10 hover:text-amber-500 rounded-lg transition-all duration-300 cursor-pointer">
@@ -383,7 +437,7 @@ export default function Home() {
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, ease: "easeOut" }}
-            className="relative z-10"
+            className="relative z-[5]"
           >
             <h1 className="font-serif text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 relative">
               <span className="inline-block animate-float" style={{ animationDelay: "0s" }}>S</span>
@@ -466,7 +520,7 @@ export default function Home() {
             </Button>
 
             <motion.a 
-              href="https://www.instagram.com/il_paxman/" 
+              href="https://www.instagram.com/_steelenews_/" 
               target="_blank" 
               rel="noopener noreferrer"
               className="p-2 rounded-full bg-white/10 dark:bg-zinc-800/50 backdrop-blur-md border border-white/20 text-zinc-800 dark:text-zinc-200 hover:bg-white/20 dark:hover:bg-zinc-700/60 transition-all duration-300"
@@ -521,7 +575,7 @@ export default function Home() {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.8, delay: 2.1 }}
                 whileHover={{ scale: 1.05 }}
-                href="https://www.instagram.com/il_paxman/" 
+                href="https://www.instagram.com/_steelenews_/" 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl transition-all duration-300 hover:shadow-lg hover:opacity-90"
