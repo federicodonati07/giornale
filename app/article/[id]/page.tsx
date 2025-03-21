@@ -1032,10 +1032,18 @@ export default function Article() {
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.8 }}
-            className="text-lg leading-9 tracking-[0.04em] text-zinc-300
+            className="text-lg leading-9 tracking-[0.04em] text-white !text-white
               font-montserrat block space-y-6 [&>p]:mb-6 
               [&>p]:leading-relaxed [&>p]:tracking-wide
               [&>*]:tracking-wide [&>*]:leading-relaxed
+              [&>*]:!text-white
+              [&_p]:!text-white
+              [&_span]:!text-white
+              [&_h1]:!text-white [&_h2]:!text-white [&_h3]:!text-white
+              [&_h4]:!text-white [&_h5]:!text-white [&_h6]:!text-white
+              [&_li]:!text-white [&_div]:!text-white
+              [&_a]:!text-white
+              [&_*]:!text-white
               [&_.note-text]:relative
               [&_.note-text]:border-b
               [&_.note-text]:border-dashed
