@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
-import { FiArrowLeft, FiCheck, FiX, FiAlertCircle, FiEye, FiHeart, FiShare2, FiMaximize2, FiMinimize2 } from "react-icons/fi"
+import { FiArrowLeft, FiCheck, FiX, FiAlertCircle, FiEye, FiHeart, FiShare2, FiMinimize2 } from "react-icons/fi"
 import { getStorage, ref as storageRef, deleteObject } from "firebase/storage"
 import { ref, get, remove, update } from "firebase/database"
 import { onAuthStateChanged } from "firebase/auth"
@@ -415,7 +415,7 @@ export default function ReviewArticlesPage() {
                 Programma pubblicazione
               </h2>
               <p className="text-zinc-600 dark:text-zinc-300">
-                Seleziona data e ora per la pubblicazione dell'articolo
+                Seleziona data e ora per la pubblicazione dell&apos;articolo
               </p>
             </div>
             
@@ -448,7 +448,7 @@ export default function ReviewArticlesPage() {
                   </div>
                 </div>
                 <p className="mt-1.5 text-xs text-zinc-500 dark:text-zinc-400 ml-1">
-                  Seleziona una data nell'anno corrente
+                  Seleziona una data nell&apos;anno corrente
                 </p>
               </div>
               
@@ -504,7 +504,7 @@ export default function ReviewArticlesPage() {
               {scheduleDate && scheduleTime && (
                 <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800/50">
                   <p className="text-sm text-blue-800 dark:text-blue-300 font-medium text-center">
-                    L'articolo sarà pubblicato il:
+                    L&apos;articolo sarà pubblicato il:
                   </p>
                   <p className="text-center text-blue-600 dark:text-blue-400 mt-1 font-bold">
                     {new Date(`${scheduleDate}T${scheduleTime}`).toLocaleString('it-IT', {
