@@ -386,12 +386,12 @@ export default function Home() {
             className="relative z-10"
           >
             <h1 className="font-serif text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 relative">
-              <span className="inline-block animate-float" style={{ animationDelay: "0s" }}>P</span>
-              <span className="inline-block animate-float" style={{ animationDelay: "0.1s" }}>A</span>
-              <span className="inline-block animate-float" style={{ animationDelay: "0.2s" }}>X</span>
-              <span className="inline-block animate-float" style={{ animationDelay: "0.3s" }}>M</span>
-              <span className="inline-block animate-float" style={{ animationDelay: "0.4s" }}>A</span>
-              <span className="inline-block animate-float" style={{ animationDelay: "0.5s" }}>N</span>
+              <span className="inline-block animate-float" style={{ animationDelay: "0s" }}>S</span>
+              <span className="inline-block animate-float" style={{ animationDelay: "0.1s" }}>T</span>
+              <span className="inline-block animate-float" style={{ animationDelay: "0.2s" }}>E</span>
+              <span className="inline-block animate-float" style={{ animationDelay: "0.3s" }}>E</span>
+              <span className="inline-block animate-float" style={{ animationDelay: "0.4s" }}>L</span>
+              <span className="inline-block animate-float" style={{ animationDelay: "0.5s" }}>E</span>
               <span className="inline-block ml-5 animate-float" style={{ animationDelay: "0.6s" }}>N</span>
               <span className="inline-block animate-float" style={{ animationDelay: "0.7s" }}>E</span>
               <span className="inline-block animate-float" style={{ animationDelay: "0.8s" }}>W</span>
@@ -580,7 +580,7 @@ export default function Home() {
               transition={{ duration: 0.8, delay: 2.8 }}
               className="text-sm text-zinc-500 dark:text-zinc-400"
             >
-              © {new Date().getFullYear()} PAXMAN NEWS. Tutti i diritti riservati.
+              © {new Date().getFullYear()} STEELE NEWS. Tutti i diritti riservati.
             </motion.p>
           </div>
         </div>
