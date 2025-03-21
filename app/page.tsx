@@ -149,7 +149,6 @@ export default function Home() {
     const fetchUserCount = async () => {
       try {
         console.log("Inizio recupero conteggio utenti...");
-        // Aggiungiamo un timestamp per evitare la cache del browser
         const response = await fetch('/api/user-count?t=' + Date.now());
         
         console.log("Risposta API ricevuta:", response.status);
@@ -164,12 +163,8 @@ export default function Home() {
         console.log("Risposta API conteggio utenti:", data);
         
         if (data.success) {
-          // Anima il conteggio solo se abbiamo un valore valido
           if (typeof data.count === 'number' && !isNaN(data.count)) {
             animateCount(0, data.count, 2000);
-            
-            // Opzionale: aggiorna anche il conteggio nel database per riferimento futuro
-            // Solo gli admin possono scrivere sul database
             if (isAdmin) {
               try {
                 const usersCountRef = ref(db, 'metadata/userCount');
