@@ -20,14 +20,15 @@
     "firebase-admin": "^13.2.0",
     "framer-motion": "^12.5.0",
     "html2canvas": "^1.4.1",
-    "next": "15.2.2",
+    "next": "^13.0.0 || ^14.0.0",
     "postcss": "^8.5.3",
     "qrcode.react": "^4.2.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-icons": "^5.5.0",
     "react-select": "^5.10.1",
-    "uuid": "^11.1.0"
+    "uuid": "^11.1.0",
+    "@netlify/plugin-nextjs": "latest"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
