@@ -536,11 +536,11 @@ export default function Article() {
           // Mantieni il background nero se l'immagine non può essere caricata
         }
         
-        // Logo "PAXMAN NEWS" in alto
+        // Logo "STEELE NEWS" in alto
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 60px Arial';
         ctx.textAlign = 'center';
-        ctx.fillText('PAXMAN NEWS', canvas.width / 2, 100);
+        ctx.fillText('STEELE NEWS', canvas.width / 2, 100);
         
         // Data sotto il logo
         const formattedDate = new Date(article?.creazione || Date.now()).toLocaleDateString('it-IT', {
@@ -639,7 +639,7 @@ export default function Article() {
         
         // Converti in immagine e scarica
         const link = document.createElement('a');
-        link.download = `paxman-news-${article?.titolo?.replace(/\s+/g, '-').toLowerCase() || 'article'}.png`;
+        link.download = `steele-news-${article?.titolo?.replace(/\s+/g, '-').toLowerCase() || 'article'}.png`;
         link.href = canvas.toDataURL('image/png');
         document.body.appendChild(link);
         link.click();

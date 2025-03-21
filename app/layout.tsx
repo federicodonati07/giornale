@@ -34,8 +34,8 @@ const montserrat = Montserrat({
 })
 
 export const metadata: Metadata = {
-  title: "PAXMAN NEWS",
-  description: "Il portale di notizie di Paxman",
+  title: "STEELE NEWS",
+  description: "Il portale di notizie di STEELE NEWS",
   icons: {
     icon: "/favicon.ico",
   },

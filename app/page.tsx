@@ -21,23 +21,6 @@ export default function Home() {
   const [displayCount, setDisplayCount] = useState(0);
   const animationRef = useRef<number | null>(null);
 
-  // Rimuovo il riferimento per l'effetto parallax
-  // const parallaxRef = useRef<HTMLDivElement>(null)
-  
-  // Rimuovo l'effetto parallax sullo scroll
-  // useEffect(() => {
-  //   const handleScroll = () => {
-  //     if (!parallaxRef.current) return
-      
-  //     const scrollY = window.scrollY
-  //     parallaxRef.current.style.transform = `translateY(${scrollY * 0.2}px)`
-  //     parallaxRef.current.style.opacity = `${1 - scrollY * 0.002}`
-  //   }
-    
-  //   window.addEventListener('scroll', handleScroll)
-  //   return () => window.removeEventListener('scroll', handleScroll)
-  // }, [])
-
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
@@ -149,6 +132,7 @@ export default function Home() {
     const fetchUserCount = async () => {
       try {
         console.log("Inizio recupero conteggio utenti...");
+        // Aggiungiamo un timestamp per evitare la cache del browser
         const response = await fetch('/api/user-count?t=' + Date.now());
         
         console.log("Risposta API ricevuta:", response.status);
@@ -386,12 +370,12 @@ export default function Home() {
             className="relative z-10"
           >
             <h1 className="font-serif text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 relative">
-              <span className="inline-block animate-float" style={{ animationDelay: "0s" }}>P</span>
-              <span className="inline-block animate-float" style={{ animationDelay: "0.1s" }}>A</span>
-              <span className="inline-block animate-float" style={{ animationDelay: "0.2s" }}>X</span>
-              <span className="inline-block animate-float" style={{ animationDelay: "0.3s" }}>M</span>
-              <span className="inline-block animate-float" style={{ animationDelay: "0.4s" }}>A</span>
-              <span className="inline-block animate-float" style={{ animationDelay: "0.5s" }}>N</span>
+              <span className="inline-block animate-float" style={{ animationDelay: "0s" }}>S</span>
+              <span className="inline-block animate-float" style={{ animationDelay: "0.1s" }}>T</span>
+              <span className="inline-block animate-float" style={{ animationDelay: "0.2s" }}>E</span>
+              <span className="inline-block animate-float" style={{ animationDelay: "0.3s" }}>E</span>
+              <span className="inline-block animate-float" style={{ animationDelay: "0.4s" }}>L</span>
+              <span className="inline-block animate-float" style={{ animationDelay: "0.5s" }}>E</span>
               <span className="inline-block ml-5 animate-float" style={{ animationDelay: "0.6s" }}>N</span>
               <span className="inline-block animate-float" style={{ animationDelay: "0.7s" }}>E</span>
               <span className="inline-block animate-float" style={{ animationDelay: "0.8s" }}>W</span>
@@ -466,7 +450,7 @@ export default function Home() {
             </Button>
 
             <motion.a 
-              href="https://www.instagram.com/il_paxman/" 
+              href="https://www.instagram.com//" 
               target="_blank" 
               rel="noopener noreferrer"
               className="p-2 rounded-full bg-white/10 dark:bg-zinc-800/50 backdrop-blur-md border border-white/20 text-zinc-800 dark:text-zinc-200 hover:bg-white/20 dark:hover:bg-zinc-700/60 transition-all duration-300"
@@ -580,7 +564,7 @@ export default function Home() {
               transition={{ duration: 0.8, delay: 2.8 }}
               className="text-sm text-zinc-500 dark:text-zinc-400"
             >
-              © {new Date().getFullYear()} PAXMAN NEWS. Tutti i diritti riservati.
+              © {new Date().getFullYear()} STEELE NEWS. Tutti i diritti riservati.
             </motion.p>
           </div>
         </div>
