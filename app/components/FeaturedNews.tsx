@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Image from "next/image"
-import { ref, get, query, limitToLast } from "firebase/database"
+import { ref, get, query, limitToLast, update, increment } from "firebase/database"
 import { db } from "../firebase"
 import { FiHeart, FiShare2, FiEye, FiClock } from "react-icons/fi"
 import Link from "next/link"
@@ -118,6 +118,17 @@ export function FeaturedNews() {
     return diffHours < 24;
   };
 
+  const handleArticleClick = async (articleId: string) => {
+    try {
+      const articleRef = ref(db, `articoli/${articleId}`);
+      await update(articleRef, {
+        view: increment(1)
+      });
+    } catch (error) {
+      console.error("Errore nell'incremento delle visualizzazioni:", error);
+    }
+  };
+
   return (
     <section className="w-full py-4 sm:py-8">
       <style jsx global>{`
@@ -195,6 +206,7 @@ export function FeaturedNews() {
               <Link 
                 href={`/article/${article.uuid}`}
                 key={article.uuid}
+                onClick={() => handleArticleClick(article.uuid)}
                 className="card-animate block group relative cursor-pointer bg-white/5 dark:bg-zinc-800/20 hover:bg-white/10 dark:hover:bg-zinc-800/30 backdrop-blur-lg border border-white/10 dark:border-white/5 rounded-xl shadow-xl overflow-hidden transition-all duration-300"
               >
                 {/* Immagine principale */}
@@ -282,6 +294,7 @@ export function FeaturedNews() {
               <Link 
                 href={`/article/${article.uuid}`}
                 key={article.uuid}
+                onClick={() => handleArticleClick(article.uuid)}
                 className="card-animate block group relative cursor-pointer bg-white/5 dark:bg-zinc-800/20 hover:bg-white/10 dark:hover:bg-zinc-800/30 backdrop-blur-lg border border-white/10 dark:border-white/5 rounded-xl shadow-xl overflow-hidden transition-all duration-300"
               >
                 <div className="flex gap-4 p-4">

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { ref, get } from "firebase/database"
+import { ref, get, update, increment } from "firebase/database"
 import { db, auth } from "../firebase"
 import { FiHeart, FiShare2, FiEye, FiClock, FiArrowLeft } from "react-icons/fi"
 import Link from "next/link"
@@ -93,6 +93,17 @@ export default function FavoriteArticles() {
       return 'adesso'
     }
   }
+
+  const handleArticleClick = async (articleId: string) => {
+    try {
+      const articleRef = ref(db, `articoli/${articleId}`);
+      await update(articleRef, {
+        view: increment(1)
+      });
+    } catch (error) {
+      console.error("Errore nell'incremento delle visualizzazioni:", error);
+    }
+  };
 
   if (loading) {
     return (
@@ -189,6 +200,7 @@ export default function FavoriteArticles() {
               >
                 <Link 
                   href={`/article/${article.uuid}`}
+                  onClick={() => handleArticleClick(article.uuid)}
                   className="block group bg-white/5 dark:bg-zinc-800/20 hover:bg-white/10 dark:hover:bg-zinc-800/30 backdrop-blur-lg border border-white/10 dark:border-white/5 rounded-2xl overflow-hidden transition-all duration-300"
                 >
                   <div className="flex flex-col sm:flex-row">
