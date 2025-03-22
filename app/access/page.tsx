@@ -320,9 +320,14 @@ export default function AccessPage() {
             </div>
             
             {!isRegistering && (
-              <div className="text-right mt-2">
-                <Link href="/password-reset" className="text-xs text-blue-500 hover:text-blue-400 transition-colors">
-                  Password dimenticata?
+              <div className="mt-2 flex justify-end">
+                <Link 
+                  href="/password-reset" 
+                  className="text-sm text-blue-500 hover:text-blue-400 transition-colors duration-300 flex items-center"
+                >
+                  <span className="border-b border-blue-500/30 hover:border-blue-400 pb-0.5">
+                    Password dimenticata?
+                  </span>
                 </Link>
               </div>
             )}
