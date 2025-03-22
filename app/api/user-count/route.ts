@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { initAdminSDK } from "@/lib/firebase-admin";
 
+// Aggiungo questa opzione per evitare il caching dell'API
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     let adminAuth;

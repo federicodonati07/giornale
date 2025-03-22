@@ -149,6 +149,7 @@ export default function Home() {
     const fetchUserCount = async () => {
       try {
         console.log("Inizio recupero conteggio utenti...");
+        // Aggiungo un timestamp random per evitare la cache
         const response = await fetch('/api/user-count?t=' + Date.now());
         
         console.log("Risposta API ricevuta:", response.status);
@@ -212,10 +213,7 @@ export default function Home() {
       animateCount(0, 15, 2000);  // Mostra subito un numero, anche prima di tentare la chiamata API
     };
 
-    // Per ora, mostriamo sempre un valore predefinito
-    animateCount(0, 15, 2000);  // Mostra subito un numero, anche prima di tentare la chiamata API
-    
-    // Tentiamo comunque di ottenere il numero reale
+    // Chiamiamo subito la funzione per ottenere il conteggio aggiornato
     fetchUserCount();
 
     return () => {
@@ -223,7 +221,7 @@ export default function Home() {
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, []);
+  }, []); // Mantengo la dipendenza vuota perché voglio che venga eseguito solo una volta al caricamento
 
   // Aggiungi una funzione per verificare e pubblicare gli articoli programmati
   useEffect(() => {
