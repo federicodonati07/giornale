@@ -646,7 +646,7 @@ export default function Articles() {
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={loadMoreArticles}
-                className="mx-auto mt-8 px-6 py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-xl shadow-lg shadow-amber-500/25 transition-all duration-300 flex items-center gap-2 group hover:shadow-xl"
+                className="cursor-pointer mx-auto mt-8 px-6 py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-xl shadow-lg shadow-amber-500/25 transition-all duration-300 flex items-center gap-2 group hover:shadow-xl"
               >
                 <span>Carica altri articoli</span>
                 <svg 

@@ -459,7 +459,7 @@ export default function Home() {
             className="flex flex-col items-center space-y-1"
           >
             <div className="flex items-baseline gap-2 text-zinc-500 dark:text-zinc-400">
-              <span className="font-medium text-base">
+              <span className="font-medium text-base text-amber-500">
                 {displayCount.toLocaleString()}
               </span>
               <span className="text-sm">

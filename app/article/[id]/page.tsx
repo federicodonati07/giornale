@@ -39,7 +39,7 @@ interface ArticleData {
 
 export default function Article() {
   // Add scroll tracking
-  const { scrollY } = useScroll()
+  const { scrollY, scrollYProgress } = useScroll()
   const containerRef = useRef<HTMLDivElement>(null)
   
   // Create all transform values at the top level
@@ -54,6 +54,8 @@ export default function Article() {
   const overlayOpacity = useTransform(scrollY, [0, 300], [0, 0.6])
   const footerY = useTransform(scrollY, [0, 500], [0, -50])
   const footerOpacity = useTransform(scrollY, [0, 500], [1, 0.8])
+  
+  const scrollProgress = useTransform(scrollYProgress, [0, 1], ["0%", "100%"])
   
   const params = useParams()
   const router = useRouter()
@@ -718,6 +720,13 @@ export default function Article() {
       transition={{ duration: 0.6 }}
       className="min-h-screen bg-gradient-to-br from-zinc-900 to-zinc-800 overflow-hidden"
     >
+      {/* Fixed scroll progress bar */}
+      <motion.div
+        initial={{ scaleX: 0 }}
+        className="fixed top-0 left-0 right-0 h-1 bg-amber-500 z-50 origin-left"
+        style={{ scaleX: scrollYProgress }}
+      />
+
       {/* Parallax background elements */}
       <motion.div 
         className="fixed inset-0 pointer-events-none"
@@ -1126,7 +1135,7 @@ export default function Article() {
               y: footerY,
               opacity: footerOpacity
             }}
-            className="border-t border-zinc-700 pt-8"
+            className="border-t border-zinc-700 pt-8 mt-20"
           >
             <div className="flex flex-wrap items-center justify-between gap-4 text-sm">
               <div className="flex flex-col gap-4">
@@ -1198,7 +1207,7 @@ export default function Article() {
                 whileHover={{ scale: 1.1, y: -3, backgroundColor: '#3f3f46' }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-                className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-full transition-colors duration-300"
+                className="cursor-pointer flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-full transition-colors duration-300"
               >
                 <motion.div
                   animate={{ y: [2, -2, 2] }}

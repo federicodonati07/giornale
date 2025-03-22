@@ -61,7 +61,6 @@ export default function NewArticlePage() {
   const [contenuto, setContenuto] = useState("")
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
-  const [uploadProgress, setUploadProgress] = useState(0)
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [showTagsDropdown, setShowTagsDropdown] = useState(false)
   const [partecipanti, setPartecipanti] = useState("")
@@ -98,6 +97,7 @@ export default function NewArticlePage() {
   // Aggiungi questi stati
   const [secondaryNotes, setSecondaryNotes] = useState<Array<{ id: string, content: string }>>([]);
   const [newNoteContent, setNewNoteContent] = useState('');
+  const [overallProgress, setOverallProgress] = useState(0);
 
   // Verifica se l'utente è autorizzato
   useEffect(() => {
@@ -185,83 +185,65 @@ export default function NewArticlePage() {
 
   // Funzione per caricare l'immagine su Firebase Storage
   const uploadImage = async (file: File, uuid: string): Promise<string> => {
-    // Ottieni l'estensione del file
-    const fileExtension = file.name.split('.').pop()
-    
-    // Crea un riferimento con l'UUID come nome file
-    const fileRef = storageRef(storage, `articoli/${uuid}.${fileExtension}`)
-    
+    const fileExtension = file.name.split('.').pop();
+    const fileRef = storageRef(storage, `articoli/${uuid}.${fileExtension}`);
+
     return new Promise((resolve, reject) => {
-      // Crea un task di caricamento con monitoraggio del progresso
-      const uploadTask = uploadBytesResumable(fileRef, file)
-      
-      // Gestisci gli eventi del caricamento
+      const uploadTask = uploadBytesResumable(fileRef, file);
+
       uploadTask.on(
         'state_changed',
         (snapshot) => {
-          // Aggiorna il progresso
-          const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100)
-          setUploadProgress(progress)
+          const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+          setOverallProgress(progress * 0.5); // Image upload is 50% of the total progress
         },
         (error) => {
-          // Gestisci gli errori
-          console.error("Errore durante il caricamento:", error)
-          
-          // Gestisci specificamente gli errori di permesso
+          console.error("Errore durante il caricamento:", error);
           if (error.code === 'storage/unauthorized') {
-            reject(new Error("Non hai i permessi per caricare file. Verifica di essere autenticato e che le regole di sicurezza lo permettano."))
+            reject(new Error("Non hai i permessi per caricare file. Verifica di essere autenticato e che le regole di sicurezza lo permettano."));
           } else {
-            reject(new Error(`Errore durante il caricamento: ${error.message}`))
+            reject(new Error(`Errore durante il caricamento: ${error.message}`));
           }
         },
         async () => {
-          // Caricamento completato con successo
           try {
-            // Ottieni l'URL di download
-            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref)
-            resolve(downloadURL)
+            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+            resolve(downloadURL);
           } catch (error) {
-            reject(new Error(`Errore nel recupero dell'URL: ${error instanceof Error ? error.message : 'Errore sconosciuto'}`))
+            reject(new Error(`Errore nel recupero dell'URL: ${error instanceof Error ? error.message : 'Errore sconosciuto'}`));
           }
         }
-      )
-    })
-  }
+      );
+    });
+  };
 
   // Funzione per salvare l'articolo
   const saveArticle = async () => {
-    // Validazione
     if (!titolo || !autore || !contenuto || !selectedFile || selectedTags.length === 0) {
-      showNotification("error", "Compila tutti i campi obbligatori, seleziona almeno un tag e carica un'immagine")
-      return
+      showNotification("error", "Compila tutti i campi obbligatori, seleziona almeno un tag e carica un'immagine");
+      return;
     }
 
-    // Verifica che l'utente sia autenticato
-    const currentUser = auth.currentUser
+    const currentUser = auth.currentUser;
     if (!currentUser) {
-      showNotification("error", "Devi essere autenticato per pubblicare un articolo")
-      return
+      showNotification("error", "Devi essere autenticato per pubblicare un articolo");
+      return;
     }
 
-    setSaving(true)
-    setUploadProgress(0)
+    setSaving(true);
+    setOverallProgress(0);
 
     try {
-      // Genera un UUID per l'articolo
-      const articleUuid = uuidv4()
-      
-      // Carica l'immagine e ottieni l'URL
-      let imageUrl = ""
+      const articleUuid = uuidv4();
+      let imageUrl = "";
       try {
-        imageUrl = await uploadImage(selectedFile, articleUuid)
+        imageUrl = await uploadImage(selectedFile, articleUuid);
       } catch (error) {
-        showNotification("error", error instanceof Error ? error.message : "Errore durante il caricamento dell'immagine")
-        setUploadProgress(0)
-        setSaving(false)
-        return
+        showNotification("error", error instanceof Error ? error.message : "Errore durante il caricamento dell'immagine");
+        setSaving(false);
+        return;
       }
-      
-      // Crea l'oggetto articolo
+
       const articleData: ArticleData = {
         titolo,
         autore,
@@ -279,34 +261,27 @@ export default function NewArticlePage() {
         userId: currentUser.uid,
         isPrivate,
         status: 'revision',
-      }
+      };
 
       try {
-        // Salva nel Realtime Database
-        const articleRef = dbRef(db, `articoli/${articleUuid}`)
-        await set(articleRef, articleData)
-        
-        showNotification("success", "Articolo inviato alla revisione")
-        
-        // Attendi un breve momento prima di reindirizzare per permettere all'utente di vedere la notifica
+        const articleRef = dbRef(db, `articoli/${articleUuid}`);
+        await set(articleRef, articleData);
+        setOverallProgress(100); // Complete the progress
+        showNotification("success", "Articolo inviato alla revisione");
         setTimeout(() => {
-          // Reindirizza alla pagina di revisione articoli invece che a quella di gestione
-          router.push("/admin/review-articles")
-        }, 1500)
+          router.push("/admin/review-articles");
+        }, 1500);
       } catch (dbError) {
-        console.error("Errore durante il salvataggio nel database:", dbError)
-        showNotification("error", "Errore durante il salvataggio nel database. Verifica le regole di sicurezza.")
-        setUploadProgress(0)
-        setSaving(false)
+        console.error("Errore durante il salvataggio nel database:", dbError);
+        showNotification("error", "Errore durante il salvataggio nel database. Verifica le regole di sicurezza.");
+        setSaving(false);
       }
-      
     } catch (error) {
-      console.error("Errore durante il salvataggio:", error)
-      showNotification("error", error instanceof Error ? error.message : "Si è verificato un errore durante il salvataggio")
-      setUploadProgress(0)
-      setSaving(false)
+      console.error("Errore durante il salvataggio:", error);
+      showNotification("error", error instanceof Error ? error.message : "Si è verificato un errore durante il salvataggio");
+      setSaving(false);
     }
-  }
+  };
 
   // Gestione dei tag
   const toggleTag = (tag: string) => {
@@ -837,7 +812,7 @@ export default function NewArticlePage() {
                   />
                   <button
                     onClick={handleAddSecondaryNote}
-                    className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
+                    className="cursor-pointer px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
                   >
                     Aggiungi Nota
                   </button>
@@ -959,22 +934,6 @@ export default function NewArticlePage() {
                     </div>
                   )}
                 </div>
-                
-                {/* Barra di progresso durante il caricamento */}
-                {saving && uploadProgress > 0 && (
-                  <div className="mt-4">
-                    <div className="flex justify-between text-xs text-zinc-500 mb-1">
-                      <span>Caricamento in corso...</span>
-                      <span>{uploadProgress}%</span>
-                    </div>
-                    <div className="w-full bg-zinc-200 dark:bg-zinc-700 rounded-full h-2 overflow-hidden">
-                      <div 
-                        className="bg-blue-500 h-full transition-all duration-300 ease-out"
-                        style={{ width: `${uploadProgress}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
 
@@ -1002,7 +961,7 @@ export default function NewArticlePage() {
                   />
                   <button
                     onClick={handleAddLink}
-                    className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
+                    className="cursor-pointer px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
                   >
                     Aggiungi Link
                   </button>
@@ -1030,19 +989,43 @@ export default function NewArticlePage() {
             </div>
           </div>
           
-          {/* Pulsante di salvataggio */}
-          <div className="mt-8 flex justify-end">
-            <Button
-              variant="solid"
-              className={`py-4 px-8 bg-gradient-to-r rounded-xl from-amber-500 to-orange-600 text-white shadow-lg cursor-pointer transition-all duration-500 ease-in-out hover:opacity-90 hover:shadow-xl hover:shadow-amber-500/20 hover:scale-[1.02] text-base font-medium tracking-wide ${
-                saving ? "opacity-70 pointer-events-none" : ""
-              }`}
-              onClick={saveArticle}
-              disabled={saving}
-            >
-              <FiSave className="mr-2 h-5 w-5" />
-              {saving ? "Invio in corso..." : "Manda a revisione"}
-            </Button>
+          {/* Pulsante di salvataggio con barra di avanzamento integrata */}
+          <div className="mt-8">
+            <div className="relative">
+              <Button
+                variant="solid"
+                className={`w-full py-4 px-8 bg-gradient-to-r rounded-xl from-amber-500 to-orange-600 text-white shadow-lg cursor-pointer transition-all duration-500 ease-in-out hover:opacity-90 hover:shadow-xl hover:shadow-amber-500/20 hover:scale-[1.02] text-base font-medium tracking-wide ${
+                  saving ? "opacity-70" : ""
+                }`}
+                onClick={saveArticle}
+                disabled={saving}
+              >
+                <div className="flex items-center justify-center gap-2">
+                  <FiSave className="h-5 w-5" />
+                  {saving ? "Invio in corso..." : "Manda a revisione"}
+                </div>
+              </Button>
+
+              {/* Barra di avanzamento sovrapposta */}
+              {saving && (
+                <div className="absolute left-0 bottom-0 w-full h-1 bg-zinc-200/20 rounded-b-xl overflow-hidden">
+                  <div 
+                    className="h-full bg-white/30 transition-all duration-300 ease-out"
+                    style={{ 
+                      width: `${overallProgress}%`,
+                      backgroundImage: 'linear-gradient(to right, rgba(255,255,255,0.1), rgba(255,255,255,0.3))',
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Percentuale di avanzamento */}
+            {saving && overallProgress > 0 && (
+              <div className="mt-2 text-center text-sm text-zinc-500 dark:text-zinc-400">
+                Avanzamento: {overallProgress}%
+              </div>
+            )}
           </div>
         </motion.div>
         
