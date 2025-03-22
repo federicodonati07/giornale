@@ -405,33 +405,126 @@ export default function Article() {
     )
   }
 
-  // Modifica la funzione che renderizza il contenuto per includere le note
-  const renderContentWithNotes = (content: string, notes?: ArticleData['notes']) => {
-    if (!notes || notes.length === 0) return content;
+  // Add this function after the renderContentWithNotes function to extract and process YouTube links
+  const renderYouTubeVideos = (content: string, additionalLinks: ArticleData['additionalLinks']) => {
+    const youtubeVideos = [];
+    let contentWithoutYouTube = content;
     
-    const contentWithNotes = content;
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(contentWithNotes, 'text/html');
-
-    notes.forEach(note => {
-      const noteElements = doc.querySelectorAll(`[data-note-id="${note.id}"]`);
-      noteElements.forEach(element => {
-        const noteWrapper = document.createElement('span');
-        noteWrapper.className = 'note-text';
-        noteWrapper.innerHTML = `
-          ${element.innerHTML}
-          <svg class="note-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" 
-              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <span class="note-tooltip">${note.note}</span>
-        `;
-        element.replaceWith(noteWrapper);
-      });
+    // Extract YouTube links from content
+    const youtubeRegex = /https?:\/\/(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/g;
+    let match;
+    while ((match = youtubeRegex.exec(content)) !== null) {
+      let videoId = '';
+      if (match[0].includes('youtu.be/')) {
+        videoId = match[0].split('youtu.be/')[1].split('?')[0];
+      } else if (match[0].includes('youtube.com/watch')) {
+        const urlParams = new URLSearchParams(match[0].split('?')[1]);
+        videoId = urlParams.get('v') || '';
+      }
+      
+      if (videoId) {
+        youtubeVideos.push({
+          id: videoId,
+          url: match[0],
+          label: `Video ${youtubeVideos.length + 1}`
+        });
+        
+        // Remove the URL from the content
+        contentWithoutYouTube = contentWithoutYouTube.replace(match[0], '');
+      }
+    }
+    
+    // Extract YouTube links from additionalLinks
+    const youtubeAdditionalLinks = additionalLinks?.filter(link => 
+      link.url.includes('youtube.com') || link.url.includes('youtu.be')
+    ) || [];
+    
+    youtubeAdditionalLinks.forEach(link => {
+      let videoId = '';
+      if (link.url.includes('youtu.be/')) {
+        videoId = link.url.split('youtu.be/')[1].split('?')[0];
+      } else if (link.url.includes('youtube.com/watch')) {
+        const urlParams = new URLSearchParams(link.url.split('?')[1]);
+        videoId = urlParams.get('v') || '';
+      } else if (link.url.includes('youtube.com/embed/')) {
+        videoId = link.url.split('youtube.com/embed/')[1].split('?')[0];
+      }
+      
+      if (videoId) {
+        youtubeVideos.push({
+          id: videoId,
+          url: link.url,
+          label: link.label
+        });
+      }
     });
-
-    return doc.body.innerHTML;
+    
+    return {
+      videos: youtubeVideos,
+      contentWithoutYouTube,
+      nonYouTubeLinks: additionalLinks?.filter(link => 
+        !link.url.includes('youtube.com') && !link.url.includes('youtu.be')
+      ) || []
+    };
   };
+
+  // Update the renderContentWithNotes function with validation
+  const renderContentWithNotes = (content: string, notes?: ArticleData['notes']) => {
+    if (!content) return '';
+    
+    // First handle existing note annotations
+    let processedContent = content;
+    if (notes && notes.length > 0) {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(content, 'text/html');
+
+      notes.forEach(note => {
+        const noteElements = doc.querySelectorAll(`[data-note-id="${note.id}"]`);
+        noteElements.forEach(element => {
+          const noteWrapper = document.createElement('span');
+          noteWrapper.className = 'note-text';
+          noteWrapper.innerHTML = `
+            ${element.innerHTML}
+            <svg class="note-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" 
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span class="note-tooltip">${note.note}</span>
+          `;
+          element.replaceWith(noteWrapper);
+        });
+      });
+      
+      processedContent = doc.body.innerHTML;
+    }
+    
+    // Get the number of secondary notes to check against
+    const secondaryNotesCount = article?.secondaryNotes?.length || 0;
+    
+    // Then handle [number] patterns and make them clickable links only if they correspond to existing notes
+    const notePattern = /\[(\d+)\]/g;
+    processedContent = processedContent.replace(notePattern, (match, noteNumber) => {
+      // Only make it clickable if the note number is valid (exists and is within range)
+      const noteIndex = parseInt(noteNumber, 10);
+      if (noteIndex > 0 && noteIndex <= secondaryNotesCount) {
+        return `<a href="#note-${noteNumber}" class="note-reference" 
+          onclick="event.preventDefault(); document.getElementById('note-${noteNumber}').scrollIntoView({behavior: 'smooth'}); 
+          document.getElementById('note-${noteNumber}').classList.add('highlight-note');">${match}</a>`;
+      } else {
+        // Return the original text without making it clickable
+        return match;
+      }
+    });
+    
+    return processedContent;
+  };
+
+  // Inside the return statement, where article content is rendered
+  // First, get YouTube videos and processed content
+  const { videos, contentWithoutYouTube, nonYouTubeLinks } = renderYouTubeVideos(
+    article?.contenuto || '', 
+    article?.additionalLinks
+  );
 
   // Aggiungi un componente semplificato per il modale di condivisione
   const ShareModal = () => {
@@ -1066,21 +1159,60 @@ export default function Article() {
               [&_.note-tooltip]:duration-200
               [&_.note-text:hover_.note-tooltip]:visible
               [&_.note-text:hover_.note-tooltip]:opacity-100
-              [&_.note-text:hover_.note-tooltip]:translate-y-0"
+              [&_.note-text:hover_.note-tooltip]:translate-y-0
+              [&_.note-reference]:text-amber-400
+              [&_.note-reference]:border-b
+              [&_.note-reference]:border-dashed
+              [&_.note-reference]:border-amber-500/50
+              [&_.note-reference]:cursor-pointer
+              [&_.note-reference]:hover:text-amber-300"
             dangerouslySetInnerHTML={{ 
-              __html: renderContentWithNotes(article?.contenuto || '', article?.notes) 
+              __html: renderContentWithNotes(contentWithoutYouTube || '', article?.notes) 
             }}
           />
+
+          {/* YouTube Videos Section */}
+          {videos.length > 0 && (
+            <div className="mt-10 mb-8">
+              <h3 className="text-sm font-medium text-zinc-400 mb-6 flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-red-500" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M19.615 3.184c-3.604-.246-11.631-.245-15.23 0-3.897.266-4.356 2.62-4.385 8.816.029 6.185.484 8.549 4.385 8.816 3.6.245 11.626.246 15.23 0 3.897-.266 4.356-2.62 4.385-8.816-.029-6.185-.484-8.549-4.385-8.816zm-10.615 12.816v-8l8 3.993-8 4.007z"/>
+                </svg>
+                Video
+              </h3>
+              <div className="space-y-8">
+                {videos.map((video, idx) => (
+                  <div key={idx} className="w-full flex flex-col items-center">
+                    <div className="w-full max-w-full aspect-video">
+                      <iframe
+                        className="w-full h-full rounded-xl border border-zinc-700/50"
+                        src={`https://www.youtube.com/embed/${video.id}`}
+                        title="YouTube video"
+                        frameBorder="0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                      ></iframe>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Note secondarie */}
           {article.secondaryNotes && article.secondaryNotes.length > 0 && (
             <div className="border-t border-zinc-700 pt-6 mt-8">
-              <h3 className="text-sm font-medium text-zinc-400 mb-4">
+              <h3 className="text-sm font-medium text-zinc-400 mb-4" id="notes-section">
                 Note
               </h3>
               <div className="space-y-3">
                 {article.secondaryNotes.map((note, index) => (
-                  <div key={note.id} className="flex items-start gap-2 text-xs font-montserrat">
+                  <div 
+                    id={`note-${index + 1}`} 
+                    key={note.id} 
+                    className="flex items-start gap-2 text-xs font-montserrat transition-colors duration-300"
+                    onAnimationEnd={(e) => e.currentTarget.classList.remove('highlight-note')}
+                  >
                     <span className="font-medium text-amber-400 flex-shrink-0">
                       [{index + 1}]
                     </span>
@@ -1093,69 +1225,37 @@ export default function Article() {
             </div>
           )}
 
-          {/* Link aggiuntivi con design minimal e integrazione YouTube */}
-          {article.additionalLinks && article.additionalLinks.length > 0 && (
+          {/* Link aggiuntivi - solo link non YouTube */}
+          {nonYouTubeLinks.length > 0 && (
             <div className="border-t border-zinc-700 pt-6 mt-8">
               <h3 className="text-sm font-medium text-zinc-400 mb-4">
                 Link correlati
               </h3>
               <div className="flex flex-col gap-5">
-                {article.additionalLinks.map((link, index) => {
-                  // Controlla se è un link YouTube
-                  const isYouTubeLink = link.url.includes('youtube.com') || link.url.includes('youtu.be');
-                  
-                  // Estrai l'ID del video (funziona sia per youtu.be che per youtube.com)
-                  let videoId = '';
-                  if (isYouTubeLink) {
-                    if (link.url.includes('youtu.be/')) {
-                      videoId = link.url.split('youtu.be/')[1].split('?')[0];
-                    } else if (link.url.includes('youtube.com/watch')) {
-                      const urlParams = new URLSearchParams(link.url.split('?')[1]);
-                      videoId = urlParams.get('v') || '';
-                    } else if (link.url.includes('youtube.com/embed/')) {
-                      videoId = link.url.split('youtube.com/embed/')[1].split('?')[0];
-                    }
-                  }
-                  
-                  return isYouTubeLink ? (
-                    <div key={index} className="w-full flex flex-col items-center">
-                      <p className="text-amber-400 font-medium mb-3">{link.label}</p>
-                      <div className="w-full max-w-2xl aspect-video">
-                        <iframe
-                          className="w-full h-full rounded-xl border border-zinc-700/50"
-                          src={`https://www.youtube.com/embed/${videoId}`}
-                          title={link.label}
-                          frameBorder="0"
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                          allowFullScreen
-                        ></iframe>
-                      </div>
-                    </div>
-                  ) : (
-                    <a
-                      key={index}
-                      href={link.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-amber-400 hover:text-amber-300 transition-colors duration-200"
+                {nonYouTubeLinks.map((link, index) => (
+                  <a
+                    key={index}
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-amber-400 hover:text-amber-300 transition-colors duration-200"
+                  >
+                    <span className="font-montserrat text-lg">{link.label}</span>
+                    <svg 
+                      className="h-3.5 w-3.5 opacity-70" 
+                      fill="none" 
+                      viewBox="0 0 24 24" 
+                      stroke="currentColor"
                     >
-                      <span className="font-montserrat text-lg">{link.label}</span>
-                      <svg 
-                        className="h-3.5 w-3.5 opacity-70" 
-                        fill="none" 
-                        viewBox="0 0 24 24" 
-                        stroke="currentColor"
-                      >
-                        <path 
-                          strokeLinecap="round" 
-                          strokeLinejoin="round" 
-                          strokeWidth={2} 
-                          d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" 
-                        />
-                      </svg>
-                    </a>
-                  );
-                })}
+                      <path 
+                        strokeLinecap="round" 
+                        strokeLinejoin="round" 
+                        strokeWidth={2} 
+                        d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" 
+                      />
+                    </svg>
+                  </a>
+                ))}
               </div>
             </div>
           )}

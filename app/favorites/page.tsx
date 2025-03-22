@@ -27,6 +27,8 @@ export default function FavoriteArticles() {
   const [articles, setArticles] = useState<ArticleData[]>([])
   const [loading, setLoading] = useState(true)
   const [user, setUser] = useState(auth.currentUser)
+  const [currentPage, setCurrentPage] = useState(1)
+  const articlesPerPage = 5
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
@@ -76,6 +78,12 @@ export default function FavoriteArticles() {
 
     fetchFavorites()
   }, [user])
+
+  const loadMoreArticles = () => {
+    setCurrentPage(prevPage => prevPage + 1)
+  }
+
+  const displayedArticles = articles.slice(0, currentPage * articlesPerPage)
 
   const getTimeAgo = (dateString: string) => {
     const date = new Date(dateString)
@@ -182,14 +190,14 @@ export default function FavoriteArticles() {
           />
         </motion.div>
 
-        {articles.length > 0 ? (
+        {displayedArticles.length > 0 ? (
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.8 }}
             className="grid gap-6 md:gap-8"
           >
-            {articles.map((article, index) => (
+            {displayedArticles.map((article, index) => (
               <motion.div
                 key={article.uuid}
                 initial={{ opacity: 0, y: 20 }}
@@ -319,6 +327,17 @@ export default function FavoriteArticles() {
               </Link>
             </motion.div>
           </motion.div>
+        )}
+
+        {displayedArticles.length < articles.length && (
+          <div className="flex justify-center mt-8">
+            <button
+              onClick={loadMoreArticles}
+              className="px-4 py-2 bg-amber-500 text-white rounded-full hover:bg-amber-600 transition-colors duration-300"
+            >
+              Carica altri articoli
+            </button>
+          </div>
         )}
       </div>
     </main>
