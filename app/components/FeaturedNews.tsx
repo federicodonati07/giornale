@@ -32,11 +32,8 @@ export function FeaturedNews() {
         // Riferimento alla collezione articoli
         const articlesRef = ref(db, 'articoli')
         
-        // Crea una query per ottenere gli ultimi 5 articoli
-        const articlesQuery = query(articlesRef, limitToLast(5))
-        
-        // Esegui la query
-        const snapshot = await get(articlesQuery)
+        // Rimuoviamo la query con limitToLast e prendiamo tutti gli articoli
+        const snapshot = await get(articlesRef)
         
         if (snapshot.exists()) {
           const articlesData: ArticleData[] = []
@@ -59,7 +56,8 @@ export function FeaturedNews() {
             new Date(b.creazione).getTime() - new Date(a.creazione).getTime()
           )
           
-          setArticles(articlesData)
+          // Prendiamo solo i primi 5 articoli dopo l'ordinamento
+          setArticles(articlesData.slice(0, 5))
         }
       } catch (error) {
         console.error("Errore nel recupero degli articoli:", error)

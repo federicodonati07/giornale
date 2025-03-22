@@ -7,6 +7,7 @@ import { db } from "../firebase"
 import { FiHeart, FiShare2, FiEye, FiClock, FiArrowLeft } from "react-icons/fi"
 import Link from "next/link"
 import { motion } from "framer-motion"
+import { AnimatedCounter } from "../components/AnimatedCounter"
 
 interface ArticleData {
   uuid: string
@@ -42,9 +43,19 @@ export default function Articles() {
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [filteredArticles, setFilteredArticles] = useState<ArticleData[]>([])
   
-  const [showAllArticles, setShowAllArticles] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [sortBy, setSortBy] = useState<'date' | 'upvote' | 'view' | 'shared'>('date')
+  
+  // Aggiungiamo uno stato per tenere traccia di quanti articoli mostrare
+  const [displayLimit, setDisplayLimit] = useState(5);
+  
+  // Modifichiamo il calcolo degli articoli da visualizzare
+  const displayedArticles = filteredArticles.slice(0, displayLimit);
+  
+  // Funzione per caricare più articoli
+  const loadMoreArticles = () => {
+    setDisplayLimit(prev => prev + 5);
+  };
 
   useEffect(() => {
     const fetchArticles = async () => {
@@ -243,11 +254,6 @@ export default function Articles() {
     setFilteredArticles(result);
   }, [selectedTags, articles, searchQuery, sortBy]);
 
-  // Calcola gli articoli da visualizzare
-  const displayedArticles = showAllArticles 
-    ? filteredArticles 
-    : filteredArticles.slice(0, 15);
-
   return (
     <main className="min-h-screen bg-gradient-to-br from-zinc-100 to-zinc-200/90 dark:from-zinc-900 dark:to-zinc-800 overflow-x-hidden">
       {/* Elementi decorativi di sfondo con animazione */}
@@ -292,10 +298,39 @@ export default function Articles() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, ease: "easeOut", delay: 0.2 }}
-            className="font-serif text-3xl sm:text-4xl md:text-5xl font-bold text-zinc-900 dark:text-zinc-50 mb-4"
+            className="font-serif text-3xl sm:text-4xl md:text-5xl font-bold text-zinc-900 dark:text-zinc-50 mb-2"
           >
             Tutti gli Articoli
           </motion.h1>
+
+          {/* Aggiungiamo il contatore di articoli */}
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.5, delay: 0.3 }}
+            className="text-sm text-zinc-500 dark:text-zinc-400 mb-4"
+          >
+            {loading ? (
+              <span className="animate-pulse">Caricamento articoli...</span>
+            ) : (
+              <span>
+                Articoli totali{' '}
+                <AnimatedCounter value={filteredArticles.length} />{' '}
+                • Mostrati{' '}
+                <AnimatedCounter value={displayedArticles.length} />
+                {(selectedTags.length > 0 || searchQuery) && (
+                  <>
+                    {selectedTags.length > 0 && (
+                      <span className="text-amber-500"> • Filtrati per tag</span>
+                    )}
+                    {searchQuery && (
+                      <span className="text-amber-500"> • Ricerca attiva</span>
+                    )}
+                  </>
+                )}
+              </span>
+            )}
+          </motion.p>
           
           <motion.div 
             initial={{ width: 0 }}
@@ -590,18 +625,34 @@ export default function Articles() {
               </motion.div>
             ))}
             
-            {/* Pulsante "Mostra più articoli" */}
-            {filteredArticles.length > 15 && (
+            {/* Pulsante "Carica altri articoli" */}
+            {displayLimit < filteredArticles.length && (
               <motion.button
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 2.2 }}
+                transition={{ duration: 0.6 }}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={() => setShowAllArticles(!showAllArticles)}
-                className="mx-auto mt-8 px-6 py-3 bg-white/10 dark:bg-zinc-800/30 hover:bg-amber-500/10 rounded-xl transition-all duration-300 text-zinc-800 dark:text-zinc-200"
+                onClick={loadMoreArticles}
+                className="mx-auto mt-8 px-6 py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-xl shadow-lg shadow-amber-500/25 transition-all duration-300 flex items-center gap-2 group hover:shadow-xl"
               >
-                {showAllArticles ? 'Mostra meno articoli' : `Mostra altri ${filteredArticles.length - 15} articoli`}
+                <span>Carica altri articoli</span>
+                <svg 
+                  className="w-5 h-5 transform transition-transform duration-300 group-hover:translate-y-1" 
+                  fill="none" 
+                  viewBox="0 0 24 24" 
+                  stroke="currentColor"
+                >
+                  <path 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round" 
+                    strokeWidth={2} 
+                    d="M19 14l-7 7m0 0l-7-7m7 7V3" 
+                  />
+                </svg>
+                <span className="text-sm opacity-80">
+                  ({Math.min(5, filteredArticles.length - displayLimit)} di {filteredArticles.length - displayLimit} rimanenti)
+                </span>
               </motion.button>
             )}
           </div>
