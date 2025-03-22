@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation"
 import { FiArrowLeft, FiMail, FiLock, FiGithub, FiUser, FiCheck, FiX, FiEye, FiEyeOff } from "react-icons/fi"
 import { FcGoogle } from "react-icons/fc"
 import { Button } from "@heroui/react"
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, GithubAuthProvider, onAuthStateChanged } from "firebase/auth"
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, GithubAuthProvider, onAuthStateChanged, sendEmailVerification } from "firebase/auth"
 import { FirebaseError } from "firebase/app"
 import { auth } from "../firebase"
 import { motion, useScroll, useTransform } from "framer-motion"
@@ -43,6 +43,11 @@ const getFirebaseErrorMessage = (error: FirebaseError): string => {
     'auth/popup-blocked': 'Il popup è stato bloccato dal browser. Abilita i popup per questo sito.',
     'auth/network-request-failed': 'Errore di rete. Controlla la tua connessione internet.',
     'auth/timeout': 'Timeout della richiesta. Riprova più tardi.',
+    'auth/email-already-exists': 'L\'indirizzo email è già utilizzato da un altro account.',
+    'auth/unverified-email': 'Devi verificare la tua email prima di accedere.',
+    'auth/missing-email': 'Inserisci un indirizzo email valido.',
+    'auth/expired-action-code': 'Il codice di reset è scaduto. Richiedi un nuovo link.',
+    'auth/invalid-action-code': 'Il codice di reset non è valido. Potrebbe essere scaduto o già utilizzato.',
   };
   
   // Restituisci il messaggio personalizzato o un messaggio generico se il codice non è mappato
@@ -140,19 +145,32 @@ export default function AccessPage() {
 
     try {
       if (isRegistering) {
-        await createUserWithEmailAndPassword(auth, email, password);
-        showNotification("success", "Registrazione avvenuta con successo!");
-        // Dopo la registrazione, passa alla modalità login
-        setIsRegistering(false);
-        setPassword("");
-        setConfirmPassword("");
+        // Crea l'utente
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        // Invia email di verifica
+        await sendEmailVerification(userCredential.user);
+        showNotification("success", "Registrazione avvenuta con successo! Ti abbiamo inviato un'email di verifica.");
+        // Reindirizza alla pagina di verifica
+        setTimeout(() => {
+          router.push('/verify-email');
+        }, 1500);
       } else {
         await signInWithEmailAndPassword(auth, email, password);
-        showNotification("success", "Accesso avvenuto con successo!");
-        // Reindirizza alla home dopo il login
-        setTimeout(() => {
-          router.push('/');
-        }, 1500);
+        // Controlla se l'email è verificata per gli utenti che accedono con email/password
+        const currentUser = auth.currentUser;
+        if (currentUser && !currentUser.emailVerified) {
+          // Se l'email non è verificata, reindirizza alla pagina di verifica
+          showNotification("info", "Devi verificare la tua email prima di accedere.");
+          setTimeout(() => {
+            router.push('/verify-email');
+          }, 1500);
+        } else {
+          showNotification("success", "Accesso avvenuto con successo!");
+          // Reindirizza alla home dopo il login
+          setTimeout(() => {
+            router.push('/');
+          }, 1500);
+        }
       }
     } catch (error: unknown) {
       if (error instanceof FirebaseError) {
@@ -172,6 +190,7 @@ export default function AccessPage() {
     try {
       const providerInstance = provider === "google" ? new GoogleAuthProvider() : new GithubAuthProvider();
       await signInWithPopup(auth, providerInstance);
+      
       showNotification("success", "Accesso avvenuto con successo!");
       // Reindirizza alla home dopo il login
       setTimeout(() => {
@@ -299,6 +318,14 @@ export default function AccessPage() {
                 {showPassword ? <FiEyeOff className="h-5 w-5" /> : <FiEye className="h-5 w-5" />}
               </button>
             </div>
+            
+            {!isRegistering && (
+              <div className="text-right mt-2">
+                <Link href="/password-reset" className="text-xs text-blue-500 hover:text-blue-400 transition-colors">
+                  Password dimenticata?
+                </Link>
+              </div>
+            )}
             
             {isRegistering && password.length > 0 && (
               <div className="space-y-2 p-4 bg-zinc-800/10 backdrop-blur-sm border border-zinc-700 rounded-xl transition-all duration-500">

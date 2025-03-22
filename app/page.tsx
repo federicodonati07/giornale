@@ -25,6 +25,13 @@ export default function Home() {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setLoading(false);
+      
+      // Controlla se l'utente è loggato ma non ha verificato l'email
+      if (currentUser && !currentUser.emailVerified && currentUser.providerData[0]?.providerId === 'password') {
+        // Se l'accesso è avvenuto con email e password e l'email non è verificata,
+        // reindirizza alla pagina di verifica
+        window.location.href = '/verify-email';
+      }
     });
 
     return () => unsubscribe();

@@ -105,9 +105,21 @@ export default function NewArticlePage() {
       const adminEmails = JSON.parse(process.env.NEXT_PUBLIC_ADMIN_EMAILS || "[]")
       const superiorEmails = JSON.parse(process.env.NEXT_PUBLIC_SUPERIOR_EMAILS || "[]")
       
-      if (user && (adminEmails.includes(user.email || '') || superiorEmails.includes(user.email || ''))) {
-        setIsAdmin(true)
-        setAutore(user.displayName || user.email || '')
+      if (user) {
+        // Verifica se l'email è verificata per gli accessi con email/password
+        if (!user.emailVerified && user.providerData[0]?.providerId === 'password') {
+          // Se l'email non è verificata, reindirizza alla pagina di verifica
+          router.push('/verify-email');
+          return;
+        }
+        
+        // Verifica se l'utente è admin o superior
+        if (adminEmails.includes(user.email || '') || superiorEmails.includes(user.email || '')) {
+          setIsAdmin(true)
+          setAutore(user.displayName || user.email || '')
+        } else {
+          router.push('/')
+        }
       } else {
         router.push('/')
       }

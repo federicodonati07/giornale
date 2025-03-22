@@ -102,12 +102,25 @@ export default function ManageArticlesPage() {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       const superiorEmails = JSON.parse(process.env.NEXT_PUBLIC_SUPERIOR_EMAILS || "[]")
       
-      if (user && superiorEmails.includes(user.email || '')) {
-        setIsAdmin(true)
-        setIsSuperior(true)
-        fetchArticles()
+      if (user) {
+        // Verifica se l'email è verificata per gli accessi con email/password
+        if (!user.emailVerified && user.providerData[0]?.providerId === 'password') {
+          // Se l'email non è verificata, reindirizza alla pagina di verifica
+          router.push('/verify-email');
+          return;
+        }
+        
+        // Verifica se l'utente è un revisore superiore
+        if (superiorEmails.includes(user.email || '')) {
+          setIsAdmin(true)
+          setIsSuperior(true)
+          fetchArticles()
+        } else {
+          // Reindirizza alla home page se non è un utente SUPERIOR
+          router.push('/')
+        }
       } else {
-        // Reindirizza alla home page se non è un utente SUPERIOR
+        // Reindirizza alla home page se non è loggato
         router.push('/')
       }
       setLoading(false)
