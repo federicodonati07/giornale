@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Image from "next/image"
-import { ref, get, query, limitToLast, update, increment } from "firebase/database"
+import { ref, get, update, increment } from "firebase/database"
 import { db } from "../firebase"
 import { FiHeart, FiShare2, FiEye, FiClock } from "react-icons/fi"
 import Link from "next/link"

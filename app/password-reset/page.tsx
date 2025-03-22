@@ -2,7 +2,6 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { FiArrowLeft, FiMail, FiCheck } from "react-icons/fi"
 import { Button } from "@heroui/react"
 import { sendPasswordResetEmail } from "firebase/auth"
@@ -11,7 +10,6 @@ import { auth } from "../firebase"
 import { motion } from "framer-motion"
 
 export default function PasswordResetPage() {
-  const router = useRouter()
   const [email, setEmail] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [message, setMessage] = useState<{ type: "success" | "error", text: string } | null>(null)
@@ -141,4 +139,4 @@ export default function PasswordResetPage() {
       </div>
     </main>
   )
-} 
+}

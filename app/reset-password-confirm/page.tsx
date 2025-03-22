@@ -46,6 +46,7 @@ export default function ResetPasswordConfirmPage() {
           text: `Imposta una nuova password per ${email}` 
         })
       } catch (error) {
+        console.error("Error verifying reset code:", error);
         setMessage({ 
           type: "error", 
           text: "Il link di reset non è più valido. Richiedi un nuovo link." 
