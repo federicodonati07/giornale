@@ -468,7 +468,7 @@ export default function Article() {
     };
   };
 
-  // Update the renderContentWithNotes function with validation
+  // Update the renderContentWithNotes function for the animated fade out
   const renderContentWithNotes = (content: string, notes?: ArticleData['notes']) => {
     if (!content) return '';
     
@@ -508,8 +508,25 @@ export default function Article() {
       const noteIndex = parseInt(noteNumber, 10);
       if (noteIndex > 0 && noteIndex <= secondaryNotesCount) {
         return `<a href="#note-${noteNumber}" class="note-reference" 
-          onclick="event.preventDefault(); document.getElementById('note-${noteNumber}').scrollIntoView({behavior: 'smooth'}); 
-          document.getElementById('note-${noteNumber}').classList.add('highlight-note');">${match}</a>`;
+          onclick="event.preventDefault(); 
+          const noteElement = document.getElementById('note-${noteNumber}');
+          noteElement.scrollIntoView({behavior: 'smooth'}); 
+          const textElement = noteElement.querySelector('p');
+          if (textElement) {
+            textElement.classList.add('highlight-note-text');
+            
+            // Aggiungiamo un'animazione per il fade out usando una seconda classe
+            setTimeout(() => {
+              textElement.classList.remove('highlight-note-text');
+              textElement.classList.add('highlight-note-text-fade');
+              
+              // Rimuoviamo la classe di fade dopo che l'animazione è completata
+              textElement.addEventListener('animationend', function handler() {
+                textElement.classList.remove('highlight-note-text-fade');
+                textElement.removeEventListener('animationend', handler);
+              });
+            }, 1500);
+          }">${match}</a>`;
       } else {
         // Return the original text without making it clickable
         return match;
@@ -518,6 +535,54 @@ export default function Article() {
     
     return processedContent;
   };
+
+  // Update CSS for the highlight effect with animation
+  const highlightNoteStyle = `
+    .highlight-note-text {
+      background-color: rgba(245, 158, 11, 0.3);
+      border-radius: 0.25rem;
+      padding: 0.15rem 0.25rem;
+      animation: highlightFadeIn 0.3s ease-in-out;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    }
+    
+    .highlight-note-text-fade {
+      background-color: rgba(245, 158, 11, 0);
+      border-radius: 0.25rem;
+      padding: 0.15rem 0.25rem;
+      animation: highlightFadeOut 1s ease-in-out;
+      box-shadow: 0 0px 0px rgba(0, 0, 0, 0);
+    }
+    
+    @keyframes highlightFadeIn {
+      from {
+        background-color: rgba(245, 158, 11, 0);
+        box-shadow: 0 0px 0px rgba(0, 0, 0, 0);
+      }
+      to {
+        background-color: rgba(245, 158, 11, 0.3);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+      }
+    }
+    
+    @keyframes highlightFadeOut {
+      from {
+        background-color: rgba(245, 158, 11, 0.3);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+      }
+      to {
+        background-color: rgba(245, 158, 11, 0);
+        box-shadow: 0 0px 0px rgba(0, 0, 0, 0);
+      }
+    }
+  `;
+
+  // Inject the CSS into the document
+  if (typeof document !== 'undefined') {
+    const styleElement = document.createElement('style');
+    styleElement.textContent = highlightNoteStyle;
+    document.head.appendChild(styleElement);
+  }
 
   // Inside the return statement, where article content is rendered
   // First, get YouTube videos and processed content
@@ -1211,7 +1276,6 @@ export default function Article() {
                     id={`note-${index + 1}`} 
                     key={note.id} 
                     className="flex items-start gap-2 text-xs font-montserrat transition-colors duration-300"
-                    onAnimationEnd={(e) => e.currentTarget.classList.remove('highlight-note')}
                   >
                     <span className="font-medium text-amber-400 flex-shrink-0">
                       [{index + 1}]
