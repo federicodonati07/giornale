@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
-import { FiArrowLeft, FiCheck, FiX, FiAlertCircle, FiEye, FiHeart, FiShare2, FiMinimize2 } from "react-icons/fi"
+import { FiArrowLeft, FiCheck, FiX, FiAlertCircle, FiEye, FiHeart, FiShare2, FiMinimize2, FiMaximize2 } from "react-icons/fi"
 import { getStorage, ref as storageRef, deleteObject } from "firebase/storage"
 import { ref, get, remove, update } from "firebase/database"
 import { onAuthStateChanged } from "firebase/auth"
@@ -547,7 +547,7 @@ export default function ReviewArticlesPage() {
         </div>
       )}
 
-      {/* Modal per visualizzare l'articolo completo - rimuovo il pulsante di schedule */}
+      {/* Modal per visualizzare l'articolo completo */}
       {showArticleModal && selectedArticle && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-0 sm:p-8 overflow-hidden">
           <div className="bg-white dark:bg-zinc-900 w-full h-full sm:h-auto sm:max-h-[90vh] sm:w-auto sm:max-w-4xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col">
@@ -566,11 +566,11 @@ export default function ReviewArticlesPage() {
               </div>
               
               <div className="flex items-center gap-3">
-                {/* Pulsanti azione per articoli in revisione - rimuovo il pulsante Schedule */}
+                {/* Pulsanti azione per articoli in revisione */}
                 <button
                   onClick={() => {
-                    setConfirmAction({ uuid: selectedArticle.uuid, action: 'reject' })
-                    setShowArticleModal(false)
+                    setConfirmAction({ uuid: selectedArticle.uuid, action: 'reject' });
+                    setShowArticleModal(false);
                   }}
                   className="p-2 rounded-xl bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-800/50 transition-colors duration-200 cursor-pointer"
                   title="Rifiuta articolo"
@@ -579,8 +579,8 @@ export default function ReviewArticlesPage() {
                 </button>
                 <button
                   onClick={() => {
-                    setConfirmAction({ uuid: selectedArticle.uuid, action: 'accept' })
-                    setShowArticleModal(false)
+                    setConfirmAction({ uuid: selectedArticle.uuid, action: 'accept' });
+                    setShowArticleModal(false);
                   }}
                   className="p-2 rounded-xl bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-800/50 transition-colors duration-200 cursor-pointer"
                   title="Approva articolo"
@@ -591,8 +591,8 @@ export default function ReviewArticlesPage() {
                 {/* Chiudi popup */}
                 <button
                   onClick={() => {
-                    setSelectedArticle(null)
-                    setShowArticleModal(false)
+                    setSelectedArticle(null);
+                    setShowArticleModal(false);
                   }}
                   className="p-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors duration-200 cursor-pointer"
                   title="Chiudi anteprima"
@@ -849,6 +849,19 @@ export default function ReviewArticlesPage() {
                       
                       {/* Pulsanti di azione */}
                       <div className="flex items-center gap-2">
+                        {/* Modifichiamo il pulsante zoom per usare FiMaximize2 invece di FiZoomIn */}
+                        <motion.button
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.9 }}
+                          onClick={() => {
+                            setSelectedArticle(article);
+                            setShowArticleModal(true);
+                          }}
+                          className="p-2 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-colors duration-200 cursor-pointer"
+                          title="Visualizza articolo completo"
+                        >
+                          <FiMaximize2 className="h-5 w-5" />
+                        </motion.button>
                         <motion.button
                           whileHover={{ scale: 1.1 }}
                           whileTap={{ scale: 0.9 }}
