@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Image from "next/image"
-import { ref, get, update } from "firebase/database"
+import { ref, get, update, increment } from "firebase/database"
 import { db } from "../firebase"
 import { FiHeart, FiShare2, FiEye, FiClock, FiArrowLeft } from "react-icons/fi"
 import Link from "next/link"
@@ -253,6 +253,17 @@ export default function Articles() {
     
     setFilteredArticles(result);
   }, [selectedTags, articles, searchQuery, sortBy]);
+
+  const handleArticleClick = async (articleId: string) => {
+    try {
+      const articleRef = ref(db, `articoli/${articleId}`);
+      await update(articleRef, {
+        view: increment(1)
+      });
+    } catch (error) {
+      console.error("Errore nell'incremento delle visualizzazioni:", error);
+    }
+  };
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-zinc-100 to-zinc-200/90 dark:from-zinc-900 dark:to-zinc-800 overflow-x-hidden">
@@ -527,6 +538,7 @@ export default function Articles() {
               >
                 <Link 
                   href={`/article/${article.uuid}`}
+                  onClick={() => handleArticleClick(article.uuid)}
                   className="block group bg-white/5 dark:bg-zinc-800/20 hover:bg-white/10 dark:hover:bg-zinc-800/30 backdrop-blur-lg border border-white/10 dark:border-white/5 rounded-2xl overflow-hidden transition-all duration-300"
                 >
                   <div className="flex flex-col sm:flex-row">

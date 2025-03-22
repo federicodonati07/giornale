@@ -62,7 +62,6 @@ export default function Article() {
   const [hasLiked, setHasLiked] = useState(false)
   const [user, setUser] = useState(auth.currentUser)
   const [actionMessage, setActionMessage] = useState<string>('')
-  const [hasViewed, setHasViewed] = useState(false)
   const [showShareModal, setShowShareModal] = useState(false)
   const [articleUrl, setArticleUrl] = useState('')
   const [isAdmin, setIsAdmin] = useState(false)
@@ -91,61 +90,35 @@ export default function Article() {
   useEffect(() => {
     const fetchArticle = async () => {
       try {
-        const articleId = params.id as string
-        const articleRef = ref(db, `articoli/${articleId}`)
-        const snapshot = await get(articleRef)
-        
+        const articleId = params.id as string;
+        const articleRef = ref(db, `articoli/${articleId}`);
+        const snapshot = await get(articleRef);
+
         if (snapshot.exists()) {
           const articleData = {
             uuid: snapshot.key || '',
             ...snapshot.val()
-          }
-          
+          };
+
           // Verifica se l'articolo è in stato di revisione e l'utente non è admin
           if (articleData.status === 'revision' && !isAdmin) {
             router.push('/');
             return;
           }
-          
-          setArticle(articleData)
 
-          // Incrementa le visualizzazioni solo se l'utente è autenticato
-          if (user) {
-            await update(articleRef, {
-              view: increment(1)
-            })
-          }
+          setArticle(articleData);
         }
       } catch (error) {
-        console.error("Errore nel recupero dell'articolo:", error)
+        console.error("Errore nel recupero dell'articolo:", error);
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
-    }
+    };
 
     if (params.id) {
-      fetchArticle()
+      fetchArticle();
     }
-  }, [params.id, user, isAdmin, router])
-
-  // Gestione visualizzazioni
-  useEffect(() => {
-    if (user && article && !hasViewed) {
-      const incrementView = async () => {
-        try {
-          const articleRef = ref(db, `articoli/${params.id}`)
-          await update(articleRef, {
-            view: increment(1)
-          })
-          setHasViewed(true)
-          setArticle(prev => prev ? {...prev, view: (prev.view || 0) + 1} : null)
-        } catch (error) {
-          console.error("Errore nell'incremento delle visualizzazioni:", error)
-        }
-      }
-      incrementView()
-    }
-  }, [user, article, params.id, hasViewed])
+  }, [params.id, isAdmin, router]);
 
   // Verifica se l'utente ha già messo like quando carica l'articolo
   useEffect(() => {

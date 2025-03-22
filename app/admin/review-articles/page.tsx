@@ -11,6 +11,8 @@ import { onAuthStateChanged } from "firebase/auth"
 import { FirebaseError } from "firebase/app"
 import { auth, db, app } from "../../firebase"
 import { motion, useScroll, useTransform } from "framer-motion"
+import { Calendar } from "../../components/Calendar"
+import { CustomTimeSelector } from "../../components/CustomTimeSelector"
 
 interface ArticleData {
   uuid: string
@@ -28,13 +30,18 @@ interface ArticleData {
   status: string // 'revision', 'accepted', 'rejected', 'scheduled'
   scheduleDate?: string // Data per la pubblicazione programmata
   additionalLinks?: { label: string; url: string }[]
+  formattedScheduleDate?: string
 }
+
+// Default time for scheduling
+const defaultTime = "07:30"
 
 export default function ReviewArticlesPage() {
   const router = useRouter()
   const [isSuperior, setIsSuperior] = useState(false)
   const [loading, setLoading] = useState(true)
   const [articles, setArticles] = useState<ArticleData[]>([])
+  const [scheduledArticles, setScheduledArticles] = useState<ArticleData[]>([])
   const [notification, setNotification] = useState<{ type: string; message: string } | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [confirmAction, setConfirmAction] = useState<{ uuid: string, action: 'reject' | 'accept' } | null>(null)
@@ -45,6 +52,7 @@ export default function ReviewArticlesPage() {
   const [scheduleTime, setScheduleTime] = useState<string>("")
   const [articleToSchedule, setArticleToSchedule] = useState<string>("")
   const [scheduleError, setScheduleError] = useState<string>("")
+
   
   // Refs per gli elementi con effetti parallax
   const headerRef = useRef<HTMLDivElement>(null)
@@ -58,9 +66,7 @@ export default function ReviewArticlesPage() {
   const contentY = useTransform(scrollY, [0, 300], [0, -30])
 
   // Ottieni la data corrente in formato YYYY-MM-DD
-  const today = new Date().toISOString().split('T')[0]
   const currentYear = new Date().getFullYear()
-  const maxDate = `${currentYear}-12-31` // Fine dell'anno corrente
 
   // Verifica se l'utente è autorizzato
   useEffect(() => {
@@ -80,6 +86,13 @@ export default function ReviewArticlesPage() {
     return () => unsubscribe()
   }, [router])
 
+  // Set default time on initial render
+  useEffect(() => {
+    if (!scheduleTime) {
+      setScheduleTime(defaultTime)
+    }
+  }, [scheduleTime])
+
   // Funzione per recuperare gli articoli in revisione
   const fetchArticles = async () => {
     try {
@@ -89,22 +102,35 @@ export default function ReviewArticlesPage() {
       
       if (snapshot.exists()) {
         const pendingReviewArticles: ArticleData[] = []
+        const scheduledArticles: ArticleData[] = []
         
         snapshot.forEach((childSnapshot) => {
           const article = {
             uuid: childSnapshot.key || '',
             ...childSnapshot.val()
-          } as ArticleData;
+          } as ArticleData
           
-          // Filtra solo gli articoli in revisione
           if (article.status === 'revision') {
             pendingReviewArticles.push(article)
+          } else if (article.status === 'scheduled') {
+            // Aggiungi la data formattata per una migliore visualizzazione
+            const scheduleDate = new Date(article.scheduleDate!)
+            article.formattedScheduleDate = scheduleDate.toLocaleString('it-IT', {
+              day: '2-digit',
+              month: 'long',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit'
+            })
+            scheduledArticles.push(article)
           }
         })
         
         setArticles(pendingReviewArticles)
+        setScheduledArticles(scheduledArticles)
       } else {
         setArticles([])
+        setScheduledArticles([])
       }
     } catch (error) {
       console.error("Errore nel recupero degli articoli:", error)
@@ -236,6 +262,11 @@ export default function ReviewArticlesPage() {
   const scheduleArticle = async (uuid: string, scheduleDateTime: string) => {
     try {
       const articleRef = ref(db, `articoli/${uuid}`);
+      const article = articles.find(a => a.uuid === uuid);
+      
+      if (!article) {
+        throw new Error("Articolo non trovato");
+      }
       
       // Utilizziamo la data ISO per garantire compatibilità
       await update(articleRef, {
@@ -243,20 +274,26 @@ export default function ReviewArticlesPage() {
         scheduleDate: scheduleDateTime
       });
       
-      // Aggiorna la lista degli articoli
-      setArticles(articles.filter(article => article.uuid !== uuid));
-      
-      // Notifica all'utente
+      // Creiamo il nuovo articolo programmato con la data formattata
       const scheduledDate = new Date(scheduleDateTime);
-      const formattedDate = scheduledDate.toLocaleString('it-IT', {
+      const formattedScheduleDate = scheduledDate.toLocaleString('it-IT', {
         day: '2-digit',
-        month: '2-digit',
+        month: 'long',
         year: 'numeric',
         hour: '2-digit',
         minute: '2-digit'
       });
       
-      showNotification("success", `Articolo programmato per il ${formattedDate}`);
+      // Aggiorniamo entrambe le liste
+      setArticles(articles.filter(a => a.uuid !== uuid));
+      setScheduledArticles([...scheduledArticles, {
+        ...article,
+        status: 'scheduled',
+        scheduleDate: scheduleDateTime,
+        formattedScheduleDate
+      }]);
+      
+      showNotification("success", `Articolo programmato per il ${formattedScheduleDate}`);
       
       // Resetta lo stato
       setShowScheduleModal(false);
@@ -286,9 +323,12 @@ export default function ReviewArticlesPage() {
       return;
     }
     
-    // Validazione data non nel passato
-    const selectedDateTime = new Date(`${scheduleDate}T${scheduleTime}`);
-    const now = new Date();
+    // Crea la data combinando data e ora
+    const [hours, minutes] = scheduleTime.split(':')
+    const selectedDateTime = new Date(scheduleDate)
+    selectedDateTime.setHours(parseInt(hours), parseInt(minutes), 0, 0)
+    
+    const now = new Date()
     
     if (selectedDateTime <= now) {
       setScheduleError("La data e l'ora selezionate devono essere future");
@@ -296,9 +336,52 @@ export default function ReviewArticlesPage() {
     }
     
     // Combina data e ora in un formato ISO
-    const scheduleDateTime = selectedDateTime.toISOString();
-    scheduleArticle(articleToSchedule, scheduleDateTime);
-  };
+    const scheduleDateTime = selectedDateTime.toISOString()
+    scheduleArticle(articleToSchedule, scheduleDateTime)
+  }
+
+  // Funzione per riportare un articolo in revisione
+  const moveToRevision = async (uuid: string) => {
+    try {
+      const articleRef = ref(db, `articoli/${uuid}`)
+      await update(articleRef, {
+        status: 'revision',
+        scheduleDate: null
+      })
+      
+      // Aggiorna le liste
+      const article = scheduledArticles.find(a => a.uuid === uuid)
+      if (article) {
+        setScheduledArticles(scheduledArticles.filter(a => a.uuid !== uuid))
+        setArticles([...articles, { ...article, status: 'revision', scheduleDate: undefined }])
+      }
+      
+      showNotification("success", "Articolo riportato in revisione")
+    } catch (error) {
+      console.error("Errore durante lo spostamento in revisione:", error)
+      showNotification("error", "Errore durante l'operazione")
+    }
+  }
+
+  // Aggiungi questa funzione per calcolare il tempo rimanente
+  const getTimeUntilPublication = (scheduleDate: string) => {
+    const now = new Date()
+    const publicationDate = new Date(scheduleDate)
+    const diffTime = publicationDate.getTime() - now.getTime()
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+    const diffHours = Math.floor((diffTime % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+    const diffMinutes = Math.floor((diffTime % (1000 * 60 * 60)) / (1000 * 60))
+
+    if (diffDays > 0) {
+      return `tra ${diffDays} ${diffDays === 1 ? 'giorno' : 'giorni'}`
+    } else if (diffHours > 0) {
+      return `tra ${diffHours} ${diffHours === 1 ? 'ora' : 'ore'}`
+    } else if (diffMinutes > 0) {
+      return `tra ${diffMinutes} ${diffMinutes === 1 ? 'minuto' : 'minuti'}`
+    } else {
+      return 'tra pochi istanti'
+    }
+  }
 
   if (loading) {
     return (
@@ -401,10 +484,10 @@ export default function ReviewArticlesPage() {
         </div>
       )}
 
-      {/* Modal per la programmazione dell'articolo con validazione */}
+      {/* Modal per la programmazione dell'articolo con calendario */}
       {showScheduleModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-zinc-800 rounded-2xl shadow-2xl w-full max-w-md p-6">
+          <div className="bg-white dark:bg-zinc-800 rounded-2xl shadow-2xl w-full max-w-md p-6 sm:p-8">
             <div className="text-center mb-6">
               <div className="mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4 bg-blue-100 dark:bg-blue-900/30">
                 <svg className="h-6 w-6 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -427,100 +510,45 @@ export default function ReviewArticlesPage() {
             )}
             
             <div className="space-y-4 mb-6">
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                  Data di pubblicazione <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <input 
-                    type="date" 
-                    value={scheduleDate}
-                    onChange={(e) => setScheduleDate(e.target.value)}
-                    className="w-full p-3 pl-10 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none cursor-pointer hover:border-blue-400"
-                    min={today}
-                    max={maxDate}
-                    required
-                  />
-                  <div className="absolute left-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
-                    <svg className="h-5 w-5 text-blue-500 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                  </div>
-                </div>
-                <p className="mt-1.5 text-xs text-zinc-500 dark:text-zinc-400 ml-1">
-                  Seleziona una data nell&apos;anno corrente
-                </p>
-              </div>
+              {/* Calendario */}
+              <Calendar
+                selectedDate={scheduleDate ? new Date(scheduleDate) : null}
+                onSelectDate={(date) => {
+                  const formattedDate = date.toISOString().split('T')[0]
+                  setScheduleDate(formattedDate)
+                }}
+                minDate={new Date()}
+                maxDate={new Date(currentYear, 11, 31)}
+                scheduledDates={scheduledArticles.map(article => new Date(article.scheduleDate!))}
+              />
               
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                  Ora di pubblicazione <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <input 
-                    type="time" 
-                    value={scheduleTime}
-                    onChange={(e) => setScheduleTime(e.target.value)}
-                    className="w-full p-3 pl-10 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none cursor-pointer hover:border-blue-400"
-                    required
-                  />
-                  <div className="absolute left-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
-                    <svg className="h-5 w-5 text-blue-500 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                </div>
-                <div className="mt-1.5 flex items-center justify-between">
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400 ml-1">
-                    Formato 24 ore (es. 14:30)
-                  </p>
-                  <div className="flex gap-1.5">
-                    <button 
-                      type="button" 
-                      onClick={() => setScheduleTime("09:00")}
-                      className="px-2 py-1 text-xs rounded-lg bg-white/20 dark:bg-zinc-700/50 text-blue-500 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/20 transition-colors"
-                    >
-                      09:00
-                    </button>
-                    <button 
-                      type="button" 
-                      onClick={() => setScheduleTime("15:00")}
-                      className="px-2 py-1 text-xs rounded-lg bg-white/20 dark:bg-zinc-700/50 text-blue-500 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/20 transition-colors"
-                    >
-                      15:00
-                    </button>
-                    <button 
-                      type="button" 
-                      onClick={() => setScheduleTime("20:00")}
-                      className="px-2 py-1 text-xs rounded-lg bg-white/20 dark:bg-zinc-700/50 text-blue-500 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/20 transition-colors"
-                    >
-                      20:00
-                    </button>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Anteprima data e ora selezionate */}
-              {scheduleDate && scheduleTime && (
-                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800/50">
-                  <p className="text-sm text-blue-800 dark:text-blue-300 font-medium text-center">
-                    L&apos;articolo sarà pubblicato il:
-                  </p>
-                  <p className="text-center text-blue-600 dark:text-blue-400 mt-1 font-bold">
-                    {new Date(`${scheduleDate}T${scheduleTime}`).toLocaleString('it-IT', {
-                      weekday: 'long',
-                      day: 'numeric',
-                      month: 'long',
-                      year: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
-                  </p>
-                </div>
-              )}
+              {/* Selezione dell'ora */}
+              <CustomTimeSelector
+                value={scheduleTime}
+                onChange={setScheduleTime}
+              />
             </div>
             
-            <div className="flex gap-3 justify-center">
+            {/* Anteprima data e ora selezionate */}
+            {scheduleDate && scheduleTime && (
+              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800/50">
+                <p className="text-sm text-blue-800 dark:text-blue-300 font-medium text-center">
+                  L&apos;articolo sarà pubblicato il:
+                </p>
+                <p className="text-center text-blue-600 dark:text-blue-400 mt-1 font-bold">
+                  {new Date(`${scheduleDate}T${scheduleTime}`).toLocaleString('it-IT', {
+                    weekday: 'long',
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </p>
+              </div>
+            )}
+            
+            <div className="flex gap-3 justify-center mt-6">
               <button
                 onClick={() => {
                   setShowScheduleModal(false);
@@ -911,6 +939,149 @@ export default function ReviewArticlesPage() {
             </motion.div>
           )}
         </motion.div>
+
+        {/* Sezione articoli programmati */}
+        {scheduledArticles.length > 0 && (
+          <div className="max-w-7xl mx-auto mt-16">
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-8 flex items-center justify-between"
+            >
+              <div>
+                <h2 className="font-serif text-3xl font-bold text-zinc-900 dark:text-zinc-50 mb-2">
+                  Articoli Programmati
+                </h2>
+                <p className="text-zinc-600 dark:text-zinc-300">
+                  {scheduledArticles.length} {scheduledArticles.length === 1 ? 'articolo programmato' : 'articoli programmati'}
+                </p>
+              </div>
+              
+              <div className="hidden sm:block px-4 py-2 bg-white/10 dark:bg-zinc-800/40 rounded-xl border border-white/20 dark:border-zinc-700/40">
+                {scheduledArticles.length > 0 && (
+                  <div className="flex flex-col gap-1">
+                    <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                      Prossima pubblicazione:
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-amber-500 dark:text-amber-400">
+                        {scheduledArticles
+                          .sort((a, b) => new Date(a.scheduleDate || '').getTime() - new Date(b.scheduleDate || '').getTime())[0]
+                          ?.formattedScheduleDate}
+                      </span>
+                      <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">
+                        {scheduledArticles.length > 0 && scheduledArticles[0]?.scheduleDate && 
+                          getTimeUntilPublication(scheduledArticles[0].scheduleDate)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+
+            <div className="grid grid-cols-1 gap-4">
+              {scheduledArticles
+                .sort((a, b) => new Date(a.scheduleDate!).getTime() - new Date(b.scheduleDate!).getTime())
+                .map((article, index) => (
+                <motion.div
+                  key={article.uuid}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                  className="group backdrop-blur-xl bg-white/15 dark:bg-zinc-800/20 border border-white/30 dark:border-white/10 rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300"
+                >
+                  <div className="flex flex-col sm:flex-row items-stretch">
+                    {/* Miniatura dell'immagine */}
+                    <div className="relative w-full sm:w-48 h-32 sm:h-auto">
+                      <Image
+                        src={article.immagine}
+                        alt={article.titolo}
+                        fill
+                        className="object-cover transition-transform duration-300 group-hover:scale-105"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.src = '/placeholder-image.jpg';
+                        }}
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent sm:bg-gradient-to-r" />
+                    </div>
+                    
+                    <div className="flex-1 p-4 sm:p-6 flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <h3 className="text-lg font-medium text-zinc-900 dark:text-zinc-50 mb-1 line-clamp-1">
+                              {article.titolo}
+                            </h3>
+                            <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-2">
+                              di {article.autore}
+                            </p>
+                          </div>
+                          
+                          <motion.button
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={() => moveToRevision(article.uuid)}
+                            className="flex items-center gap-2 px-4 py-2 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-800/50 transition-all duration-200 text-sm font-medium"
+                          >
+                            <FiX className="h-4 w-4" />
+                            <span className="hidden sm:inline">Riporta in revisione</span>
+                            <span className="sm:hidden">Annulla</span>
+                          </motion.button>
+                        </div>
+                        
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {article.tag?.split(',').slice(0, 3).map((tag, idx) => (
+                            <span
+                              key={idx}
+                              className="px-2 py-1 text-xs bg-white/10 dark:bg-zinc-700/40 rounded-full text-zinc-600 dark:text-zinc-400"
+                            >
+                              {tag.trim()}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      
+                      <div className="mt-4 pt-4 border-t border-zinc-200/10 dark:border-zinc-700/40 flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className="flex flex-col sm:flex-row sm:items-center sm:gap-3">
+                            <div className="flex items-center text-amber-500 dark:text-amber-400">
+                              <svg className="h-4 w-4 mr-1 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                              <span className="text-sm font-medium">
+                                {article.formattedScheduleDate}
+                              </span>
+                            </div>
+                            
+                            <motion.div 
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              className="text-xs font-medium px-2 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400"
+                            >
+                              {getTimeUntilPublication(article.scheduleDate!)}
+                            </motion.div>
+                          </div>
+
+                          <div className="flex items-center gap-3 text-zinc-500 dark:text-zinc-400">
+                            <span className="flex items-center text-xs">
+                              <FiEye className="h-3 w-3 mr-1" />
+                              {article.view || 0}
+                            </span>
+                            <span className="flex items-center text-xs">
+                              <FiHeart className="h-3 w-3 mr-1" />
+                              {article.upvote || 0}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </main>
   )
