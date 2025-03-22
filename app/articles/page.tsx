@@ -8,6 +8,7 @@ import { FiHeart, FiShare2, FiEye, FiClock, FiArrowLeft } from "react-icons/fi"
 import Link from "next/link"
 import { motion } from "framer-motion"
 import { AnimatedCounter } from "../components/AnimatedCounter"
+import { auth } from "../firebase"
 
 interface ArticleData {
   uuid: string
@@ -56,6 +57,18 @@ export default function Articles() {
   const loadMoreArticles = () => {
     setDisplayLimit(prev => prev + 5);
   };
+
+  // Aggiungi lo state per l'utente
+  const [user, setUser] = useState(auth.currentUser);
+
+  // Aggiungi useEffect per monitorare lo stato dell'autenticazione
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged((currentUser) => {
+      setUser(currentUser);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     const fetchArticles = async () => {
@@ -238,11 +251,11 @@ export default function Articles() {
     
     // Applica i filtri per tag
     if (selectedTags.length > 0) {
-      result = result.filter(article => 
-        article.tag?.split(',').some(tag => 
-          selectedTags.includes(tag.trim().toUpperCase())
-        )
-      );
+      result = result.filter(article => {
+        const articleTags = article.tag?.split(',').map(tag => tag.trim().toUpperCase()) || [];
+        // Verifica che tutti i tag selezionati siano presenti nell'articolo
+        return selectedTags.every(selectedTag => articleTags.includes(selectedTag));
+      });
     }
     
     // Applica il filtro di ricerca
@@ -284,9 +297,42 @@ export default function Articles() {
       </div>
       
       <div className="container mx-auto px-4 py-8 sm:py-12 relative z-10">
-        {/* Header con navigazione */}
+        {/* Header con navigazione e link ai preferiti */}
+        <div className="flex justify-between items-center mb-8">
+          <motion.div
+            initial={{ x: -30, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            transition={{ duration: 0.5 }}
+          >
+            <Link 
+              href="/"
+              className="inline-flex items-center text-sm text-zinc-600 dark:text-zinc-400 hover:text-amber-500 dark:hover:text-amber-400 transition-colors duration-300"
+            >
+              <FiArrowLeft className="mr-2 h-4 w-4" />
+              Torna alla home
+            </Link>
+          </motion.div>
+
+          {/* Link Articoli Preferiti - visibile solo se autenticato */}
+          {user && (
+            <motion.div
+              initial={{ x: 30, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              transition={{ duration: 0.5 }}
+            >
+              <Link
+                href="/favorites"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-amber-500/10 text-amber-500 hover:bg-amber-500 hover:text-white rounded-full transition-all duration-300"
+              >
+                <FiHeart className="h-4 w-4" />
+                <span>Articoli Preferiti</span>
+              </Link>
+            </motion.div>
+          )}
+        </div>
+
         <motion.div 
-          initial={{ opacity: 0, y: -20 }}
+          initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, ease: "easeOut" }}
           className="mb-8 sm:mb-12"
@@ -296,25 +342,16 @@ export default function Articles() {
             animate={{ x: 0, opacity: 1 }}
             transition={{ duration: 0.5 }}
           >
-            <Link 
-              href="/"
-              className="inline-flex items-center text-sm text-zinc-600 dark:text-zinc-400 hover:text-amber-500 dark:hover:text-amber-400 transition-colors duration-300 mb-4"
+            <motion.h1 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.7, ease: "easeOut", delay: 0.2 }}
+              className="font-serif text-3xl sm:text-4xl md:text-5xl font-bold text-zinc-900 dark:text-zinc-50 mb-2"
             >
-              <FiArrowLeft className="mr-2 h-4 w-4" />
-              Torna alla home
-            </Link>
+              Tutti gli Articoli
+            </motion.h1>
           </motion.div>
           
-          <motion.h1 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, ease: "easeOut", delay: 0.2 }}
-            className="font-serif text-3xl sm:text-4xl md:text-5xl font-bold text-zinc-900 dark:text-zinc-50 mb-2"
-          >
-            Tutti gli Articoli
-          </motion.h1>
-
-          {/* Aggiungiamo il contatore di articoli */}
           <motion.p
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}

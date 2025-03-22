@@ -55,7 +55,6 @@ export default function Article() {
   const footerY = useTransform(scrollY, [0, 500], [0, -50])
   const footerOpacity = useTransform(scrollY, [0, 500], [1, 0.8])
   
-  const scrollProgress = useTransform(scrollYProgress, [0, 1], ["0%", "100%"])
   
   const params = useParams()
   const router = useRouter()
@@ -1094,37 +1093,69 @@ export default function Article() {
             </div>
           )}
 
-          {/* Link aggiuntivi con design minimal */}
+          {/* Link aggiuntivi con design minimal e integrazione YouTube */}
           {article.additionalLinks && article.additionalLinks.length > 0 && (
             <div className="border-t border-zinc-700 pt-6 mt-8">
               <h3 className="text-sm font-medium text-zinc-400 mb-4">
                 Link correlati
               </h3>
-              <div className="flex flex-wrap gap-3">
-                {article.additionalLinks.map((link, index) => (
-                  <a
-                    key={index}
-                    href={link.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className=" inline-flex items-center gap-1.5 text-amber-400 hover:text-amber-300 transition-colors duration-200"
-                  >
-                    <span className="font-montserrat text-lg">{link.label}</span>
-                    <svg 
-                      className="h-3.5 w-3.5 opacity-70" 
-                      fill="none" 
-                      viewBox="0 0 24 24" 
-                      stroke="currentColor"
+              <div className="flex flex-col gap-5">
+                {article.additionalLinks.map((link, index) => {
+                  // Controlla se è un link YouTube
+                  const isYouTubeLink = link.url.includes('youtube.com') || link.url.includes('youtu.be');
+                  
+                  // Estrai l'ID del video (funziona sia per youtu.be che per youtube.com)
+                  let videoId = '';
+                  if (isYouTubeLink) {
+                    if (link.url.includes('youtu.be/')) {
+                      videoId = link.url.split('youtu.be/')[1].split('?')[0];
+                    } else if (link.url.includes('youtube.com/watch')) {
+                      const urlParams = new URLSearchParams(link.url.split('?')[1]);
+                      videoId = urlParams.get('v') || '';
+                    } else if (link.url.includes('youtube.com/embed/')) {
+                      videoId = link.url.split('youtube.com/embed/')[1].split('?')[0];
+                    }
+                  }
+                  
+                  return isYouTubeLink ? (
+                    <div key={index} className="w-full flex flex-col items-center">
+                      <p className="text-amber-400 font-medium mb-3">{link.label}</p>
+                      <div className="w-full max-w-2xl aspect-video">
+                        <iframe
+                          className="w-full h-full rounded-xl border border-zinc-700/50"
+                          src={`https://www.youtube.com/embed/${videoId}`}
+                          title={link.label}
+                          frameBorder="0"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                        ></iframe>
+                      </div>
+                    </div>
+                  ) : (
+                    <a
+                      key={index}
+                      href={link.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-amber-400 hover:text-amber-300 transition-colors duration-200"
                     >
-                      <path 
-                        strokeLinecap="round" 
-                        strokeLinejoin="round" 
-                        strokeWidth={2} 
-                        d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" 
-                      />
-                    </svg>
-                  </a>
-                ))}
+                      <span className="font-montserrat text-lg">{link.label}</span>
+                      <svg 
+                        className="h-3.5 w-3.5 opacity-70" 
+                        fill="none" 
+                        viewBox="0 0 24 24" 
+                        stroke="currentColor"
+                      >
+                        <path 
+                          strokeLinecap="round" 
+                          strokeLinejoin="round" 
+                          strokeWidth={2} 
+                          d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" 
+                        />
+                      </svg>
+                    </a>
+                  );
+                })}
               </div>
             </div>
           )}

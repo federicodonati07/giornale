@@ -4,13 +4,14 @@ import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
-import { FiArrowLeft, FiTrash2, FiEye, FiHeart, FiShare2, FiAlertCircle } from "react-icons/fi"
-import { getStorage, ref as storageRef, deleteObject } from "firebase/storage"
-import { ref, get, remove } from "firebase/database"
+import { FiArrowLeft, FiTrash2, FiEye, FiHeart, FiShare2, FiAlertCircle, FiX } from "react-icons/fi"
+import { getStorage, ref as storageRef, deleteObject, uploadBytes, getDownloadURL } from "firebase/storage"
+import { ref, get, remove, update } from "firebase/database"
 import { onAuthStateChanged } from "firebase/auth"
 import { FirebaseError } from "firebase/app"
 import { auth, db, app } from "../../firebase"
 import { motion, useScroll, useTransform } from "framer-motion"
+import { v4 as uuidv4 } from 'uuid'
 
 interface ArticleData {
   uuid: string
@@ -28,6 +29,7 @@ interface ArticleData {
   additionalLinks?: { label: string; url: string }[]
   status?: string
   scheduleDate?: string
+  secondaryNotes?: { id: string; content: string }[]
 }
 
 export default function ManageArticlesPage() {
@@ -41,6 +43,21 @@ export default function ManageArticlesPage() {
   const [sortBy, setSortBy] = useState<keyof ArticleData>('creazione')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
   const [searchTerm, setSearchTerm] = useState('')
+  const [editingArticle, setEditingArticle] = useState<ArticleData | null>(null)
+  const [editFormData, setEditFormData] = useState({
+    titolo: '',
+    contenuto: '',
+    tag: '',
+    autore: '',
+    partecipanti: '',
+    isPrivate: false,
+    immagine: '',
+    additionalLinks: [] as Array<{ url: string, label: string }>,
+    secondaryNotes: [] as Array<{ id: string, content: string }>,
+    newNoteContent: '',
+    newLinkUrl: '',
+    newLinkLabel: ''
+  })
 
   // Add scroll tracking for parallax effects
   const { scrollY } = useScroll()
@@ -64,6 +81,22 @@ export default function ManageArticlesPage() {
   const tableOpacity = useTransform(scrollY, [0, 100], [0.95, 1])
   const tableY = useTransform(scrollY, [0, 100], [15, 0])
 
+
+  // Aggiungi le categorie disponibili
+  const availableCategories = [
+    "ATTUALITÀ",
+    "POLITICA",
+    "ESTERO",
+    "ECONOMIA",
+    "TECNOLOGIA",
+    "SPORT",
+    "AVIAZIONE",
+    "SCIENZE & NATURA",
+    "MEDICINA",
+    "ARTE & CULTURA",
+    "ITALIA"
+  ];
+
   // Verifica se l'utente è autorizzato
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -82,6 +115,24 @@ export default function ManageArticlesPage() {
 
     return () => unsubscribe()
   }, [router])
+
+  // Modifica l'useEffect per l'inizializzazione del contenuto
+  useEffect(() => {
+    if (editingArticle) {
+      const editorContent = document.getElementById('article-content');
+      if (editorContent) {
+        // Imposta il contenuto iniziale
+        editorContent.innerHTML = editFormData.contenuto || '';
+        
+        // Aggiungi un placeholder se il contenuto è vuoto
+        if (!editFormData.contenuto) {
+          editorContent.dataset.empty = 'true';
+        } else {
+          delete editorContent.dataset.empty;
+        }
+      }
+    }
+  }, [editingArticle, editFormData.contenuto]);
 
   // Funzione per recuperare gli articoli
   const fetchArticles = async () => {
@@ -226,6 +277,188 @@ export default function ManageArticlesPage() {
     if (content.length <= maxLength) return content
     return content.substring(0, maxLength).trim() + '...'
   }
+
+  // Aggiungi la funzione per gestire la sospensione/riattivazione
+  const toggleArticleStatus = async (article: ArticleData) => {
+    try {
+      const articleRef = ref(db, `articoli/${article.uuid}`);
+      const newStatus = article.status === 'suspended' ? 'accepted' : 'suspended';
+      
+      await update(articleRef, {
+        status: newStatus
+      });
+      
+      // Aggiorna lo stato locale
+      setArticles(articles.map(a => 
+        a.uuid === article.uuid 
+          ? { ...a, status: newStatus }
+          : a
+      ));
+      
+      showNotification(
+        "success", 
+        newStatus === 'suspended' 
+          ? "Articolo sospeso con successo"
+          : "Articolo riattivato con successo"
+      );
+    } catch (error) {
+      console.error("Errore durante l'aggiornamento dello stato:", error);
+      showNotification("error", "Errore durante l'aggiornamento dello stato dell'articolo");
+    }
+  };
+
+  // Sostituisci queste due funzioni con il nuovo approccio
+  const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setEditFormData(prev => ({
+      ...prev,
+      contenuto: e.target.value
+    }));
+  };
+
+  // Modifica la funzione handleTagChange per gestire la selezione dei tag
+  const handleTagChange = (category: string) => {
+    const currentTags = editFormData.tag
+      .split(',')
+      .map(tag => tag.trim())
+      .filter(tag => tag.length > 0);
+    
+    if (currentTags.includes(category)) {
+      // Rimuovi il tag se già presente
+      const updatedTags = currentTags.filter(tag => tag !== category);
+      setEditFormData({
+        ...editFormData,
+        tag: updatedTags.join(', ')
+      });
+    } else {
+      // Aggiungi il tag se non è presente
+      const updatedTags = [...currentTags, category];
+      setEditFormData({
+        ...editFormData,
+        tag: updatedTags.join(', ')
+      });
+    }
+  };
+
+  // Aggiungi la funzione per gestire il salvataggio delle modifiche
+  const handleSaveEdit = async () => {
+    if (!editingArticle) return;
+    
+    try {
+      const articleRef = ref(db, `articoli/${editingArticle.uuid}`);
+      await update(articleRef, {
+        titolo: editFormData.titolo,
+        contenuto: editFormData.contenuto, // Ora contiene direttamente l'HTML
+        tag: editFormData.tag.split(',').map(t => t.trim()).join(', '),
+        autore: editFormData.autore,
+        partecipanti: editFormData.partecipanti,
+        isPrivate: editFormData.isPrivate,
+        immagine: editFormData.immagine,
+        additionalLinks: editFormData.additionalLinks,
+        secondaryNotes: editFormData.secondaryNotes
+      });
+      
+      // Aggiorna la lista degli articoli
+      setArticles(articles.map(article => 
+        article.uuid === editingArticle.uuid 
+          ? { 
+              ...article, 
+              ...editFormData,
+              tag: editFormData.tag.split(',').map(t => t.trim()).join(', ')
+            }
+          : article
+      ));
+      
+      setEditingArticle(null);
+      showNotification("success", "Articolo aggiornato con successo");
+    } catch (error) {
+      console.error("Errore durante l'aggiornamento:", error);
+      showNotification("error", "Errore durante l'aggiornamento dell'articolo");
+    }
+  };
+
+  // Aggiungi la funzione per gestire l'upload dell'immagine
+  const handleImageUpload = async (file: File) => {
+    if (!editingArticle) return;
+
+    try {
+      const storage = getStorage(app);
+      
+      // Se esiste già un'immagine, eliminala
+      if (editingArticle.immagine && editingArticle.immagine.includes('firebasestorage.googleapis.com')) {
+        try {
+          const oldImageUrl = new URL(editingArticle.immagine);
+          const oldImagePath = decodeURIComponent(oldImageUrl.pathname.split('/o/')[1].split('?')[0]);
+          const oldImageRef = storageRef(storage, oldImagePath);
+          await deleteObject(oldImageRef);
+        } catch (error) {
+          console.error("Errore durante l'eliminazione della vecchia immagine:", error);
+        }
+      }
+
+      // Carica la nuova immagine
+      const imageRef = storageRef(storage, `articles/${editingArticle.uuid}/${file.name}`);
+      await uploadBytes(imageRef, file);
+      const downloadURL = await getDownloadURL(imageRef);
+
+      setEditFormData(prev => ({
+        ...prev,
+        immagine: downloadURL
+      }));
+
+      showNotification("success", "Immagine caricata con successo");
+    } catch (error) {
+      console.error("Errore durante il caricamento dell'immagine:", error);
+      showNotification("error", "Errore durante il caricamento dell'immagine");
+    }
+  };
+
+  // Aggiungi funzioni per gestire le note secondarie
+  const handleAddSecondaryNote = () => {
+    if (!editFormData.newNoteContent.trim()) {
+      showNotification('error', 'La nota non può essere vuota');
+      return;
+    }
+
+    const newNote = {
+      id: uuidv4(),
+      content: editFormData.newNoteContent.trim()
+    };
+
+    setEditFormData(prev => ({
+      ...prev,
+      secondaryNotes: [...prev.secondaryNotes, newNote],
+      newNoteContent: ''
+    }));
+  };
+
+  const handleRemoveSecondaryNote = (idToRemove: string) => {
+    setEditFormData(prev => ({
+      ...prev,
+      secondaryNotes: prev.secondaryNotes.filter(note => note.id !== idToRemove)
+    }));
+  };
+
+  // Aggiungi funzioni per gestire i link aggiuntivi
+  const handleAddLink = () => {
+    if (!editFormData.newLinkUrl || !editFormData.newLinkLabel) {
+      showNotification('error', 'Inserisci sia URL che etichetta per il link');
+      return;
+    }
+
+    setEditFormData(prev => ({
+      ...prev,
+      additionalLinks: [...prev.additionalLinks, { url: editFormData.newLinkUrl, label: editFormData.newLinkLabel }],
+      newLinkUrl: '',
+      newLinkLabel: ''
+    }));
+  };
+
+  const handleRemoveLink = (indexToRemove: number) => {
+    setEditFormData(prev => ({
+      ...prev,
+      additionalLinks: prev.additionalLinks.filter((_, index) => index !== indexToRemove)
+    }));
+  };
 
   if (loading) {
     return (
@@ -406,6 +639,338 @@ export default function ManageArticlesPage() {
             </div>
           </motion.div>
         </motion.div>
+      )}
+      
+      {/* Modale di modifica */}
+      {editingArticle && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white dark:bg-zinc-800 rounded-2xl shadow-2xl w-full max-w-4xl p-6 max-h-[90vh] overflow-y-auto"
+          >
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-serif font-bold text-zinc-900 dark:text-zinc-50">
+                Modifica Articolo
+              </h2>
+              <button
+                onClick={() => setEditingArticle(null)}
+                className="text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+              >
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              {/* Titolo */}
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+                  Titolo
+                </label>
+                <input
+                  type="text"
+                  value={editFormData.titolo}
+                  onChange={(e) => setEditFormData({...editFormData, titolo: e.target.value})}
+                  className="w-full p-3 bg-white/5 border border-white/20 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
+                />
+              </div>
+
+              {/* Note secondarie */}
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+                  Note secondarie
+                </label>
+                <div className="space-y-4">
+                  <div className="flex gap-4">
+                    <input
+                      type="text"
+                      value={editFormData.newNoteContent}
+                      onChange={(e) => setEditFormData({...editFormData, newNoteContent: e.target.value})}
+                      placeholder="Inserisci una nota secondaria"
+                      className="flex-1 p-2 bg-white/5 border border-white/20 rounded-lg focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
+                    />
+                    <button
+                      onClick={handleAddSecondaryNote}
+                      className="cursor-pointer px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
+                    >
+                      Aggiungi Nota
+                    </button>
+                  </div>
+
+                  {editFormData.secondaryNotes.length > 0 && (
+                    <div className="p-4 bg-white/5 border border-white/20 rounded-xl">
+                      <h4 className="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-3">
+                        Note inserite ({editFormData.secondaryNotes.length})
+                      </h4>
+                      <div className="space-y-3">
+                        {editFormData.secondaryNotes.map((note, index) => (
+                          <div 
+                            key={note.id}
+                            className="flex items-start justify-between gap-3 p-3 bg-zinc-100 dark:bg-zinc-800/50 rounded-lg"
+                          >
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium text-amber-600 dark:text-amber-400">
+                                  [{index + 1}]
+                                </span>
+                                <p className="text-sm text-zinc-700 dark:text-zinc-300">
+                                  {note.content}
+                                </p>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => handleRemoveSecondaryNote(note.id)}
+                              className="text-zinc-400 hover:text-red-500 transition-colors"
+                            >
+                              <FiX className="h-5 w-5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Link aggiuntivi */}
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+                  Link aggiuntivi
+                </label>
+                <div className="space-y-4">
+                  <div className="flex gap-4">
+                    <input
+                      type="text"
+                      value={editFormData.newLinkLabel}
+                      onChange={(e) => setEditFormData({...editFormData, newLinkLabel: e.target.value})}
+                      placeholder="Etichetta del link"
+                      className="flex-1 p-2 bg-white/5 border border-white/20 rounded-lg focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
+                    />
+                    <input
+                      type="url"
+                      value={editFormData.newLinkUrl}
+                      onChange={(e) => setEditFormData({...editFormData, newLinkUrl: e.target.value})}
+                      placeholder="URL"
+                      className="flex-1 p-2 bg-white/5 border border-white/20 rounded-lg focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
+                    />
+                    <button
+                      onClick={handleAddLink}
+                      className="cursor-pointer px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
+                    >
+                      Aggiungi Link
+                    </button>
+                  </div>
+
+                  {editFormData.additionalLinks.length > 0 && (
+                    <div className="flex flex-wrap gap-2 p-4 bg-white/5 border border-white/20 rounded-lg">
+                      {editFormData.additionalLinks.map((link, index) => (
+                        <div key={index} className="flex items-center gap-2 bg-amber-500/10 text-amber-600 dark:text-amber-400 px-3 py-1.5 rounded-full">
+                          <span>{link.label}</span>
+                          <button
+                            onClick={() => handleRemoveLink(index)}
+                            className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300"
+                          >
+                            <FiX className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Barra degli strumenti e Editor */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+                  Contenuto *
+                </label>
+                
+                {/* Editor come textarea */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+                      Modifica HTML
+                    </label>
+                    <textarea
+                      id="article-content-textarea"
+                      value={editFormData.contenuto}
+                      onChange={handleContentChange}
+                      className="min-h-[300px] w-full p-4 bg-white/5 border border-white/20 rounded-xl 
+                                focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 
+                                transition-all duration-300 text-zinc-900 dark:text-zinc-50 
+                                outline-none font-mono text-sm overflow-auto"
+                      placeholder="Inserisci il contenuto HTML del tuo articolo..."
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+                      Anteprima
+                    </label>
+                    <div 
+                      className="h-[300px] w-full p-4 bg-white/10 border border-white/20 rounded-xl
+                                overflow-y-auto prose prose-zinc dark:prose-invert max-w-none
+                                [&>p]:mb-4 [&>p]:leading-relaxed [&>p]:tracking-wide
+                                [&_a]:text-amber-500 [&_a]:no-underline [&_a]:cursor-pointer
+                                [&_a:hover]:text-amber-600 
+                                dark:[&_a]:text-amber-500 
+                                dark:[&_a:hover]:text-amber-600
+                                [&_a]:transition-colors [&_a]:duration-200
+                                [&_[style*='background-color: #fb923c']]:text-zinc-900"
+                      style={{ 
+                        scrollbarWidth: 'thin',
+                        scrollbarColor: 'rgba(161, 161, 170, 0.5) transparent'
+                      }}
+                      dangerouslySetInnerHTML={{ __html: editFormData.contenuto }}
+                    />
+                  </div>
+                </div>
+                
+                <p className="mt-2 text-xs text-zinc-500">
+                  Modifica direttamente il codice HTML nella casella a sinistra. L&apos;anteprima mostra come apparirà l&apos;articolo.
+                </p>
+              </div>
+
+              {/* Immagine */}
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+                  Immagine
+                </label>
+                <div className="flex items-center gap-4">
+                  <div className="relative h-24 w-24 rounded-lg overflow-hidden">
+                    <Image
+                      src={editFormData.immagine}
+                      alt="Anteprima"
+                      fill
+                      className="object-cover"
+                    />
+                  </div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => e.target.files?.[0] && handleImageUpload(e.target.files[0])}
+                    className="flex-1 p-3 bg-white/5 border border-white/20 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Autore e Partecipanti */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+                    Autore
+                  </label>
+                  <input
+                    type="text"
+                    value={editFormData.autore}
+                    onChange={(e) => setEditFormData({...editFormData, autore: e.target.value})}
+                    className="w-full p-3 bg-white/5 border border-white/20 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+                    Partecipanti
+                  </label>
+                  <input
+                    type="text"
+                    value={editFormData.partecipanti}
+                    onChange={(e) => setEditFormData({...editFormData, partecipanti: e.target.value})}
+                    className="w-full p-3 bg-white/5 border border-white/20 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Tags */}
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+                  Categorie
+                </label>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 p-4 bg-white/5 border border-white/20 rounded-xl">
+                  {availableCategories.map((category) => {
+                    const isSelected = editFormData.tag
+                      .split(',')
+                      .map(tag => tag.trim())
+                      .includes(category);
+                    
+                    return (
+                      <div 
+                        key={category}
+                        onClick={() => handleTagChange(category)}
+                        className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors ${
+                          isSelected 
+                            ? 'bg-blue-500/20 border border-blue-500/30' 
+                            : 'bg-white/5 border border-white/10 hover:bg-white/10'
+                        }`}
+                      >
+                        <div className={`flex-shrink-0 h-4 w-4 rounded border ${
+                          isSelected 
+                            ? 'bg-blue-500 border-blue-500 flex items-center justify-center' 
+                            : 'border-zinc-300 dark:border-zinc-600'
+                        }`}>
+                          {isSelected && (
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </div>
+                        <span className="text-sm text-zinc-800 dark:text-zinc-200">
+                          {category}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Visibilità */}
+              <div className="flex items-center justify-between p-4 bg-white/5 dark:bg-zinc-800/20 rounded-xl border border-white/10 dark:border-zinc-700/50">
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
+                    Visibilità articolo
+                  </span>
+                  <span className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                    {editFormData.isPrivate 
+                      ? "Solo gli utenti registrati potranno vedere questo articolo" 
+                      : "L'articolo sarà visibile a tutti"}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditFormData({...editFormData, isPrivate: !editFormData.isPrivate})}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 cursor-pointer focus:outline-none
+                    ${editFormData.isPrivate 
+                      ? 'bg-amber-500' 
+                      : 'bg-zinc-300 dark:bg-zinc-600'}`}
+                >
+                  <span className="sr-only">
+                    Toggle article visibility
+                  </span>
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300
+                      ${editFormData.isPrivate ? 'translate-x-6' : 'translate-x-1'}`}
+                  />
+                </button>
+              </div>
+
+              <div className="flex justify-end gap-4 mt-6">
+                <button
+                  onClick={() => setEditingArticle(null)}
+                  className="px-4 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-700 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-colors duration-200"
+                >
+                  Annulla
+                </button>
+                <button
+                  onClick={handleSaveEdit}
+                  className="px-4 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-colors duration-200"
+                >
+                  Salva Modifiche
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
       )}
       
       {/* Main content with enhanced parallax effects */}
@@ -610,18 +1175,60 @@ export default function ManageArticlesPage() {
                             </svg>
                           </button>
                         )}
-                        {isSuperior ? (
-                          <button 
-                            className="p-2 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-red-100 dark:hover:bg-red-900/30 hover:text-red-600 dark:hover:text-red-400 transition-colors duration-200 cursor-pointer"
-                            onClick={() => setDeleteConfirm(article.uuid)}
-                            title="Elimina articolo"
-                          >
-                            <FiTrash2 className="h-4 w-4" />
-                          </button>
-                        ) : (
-                          <div className="p-2 rounded-full bg-zinc-100/50 dark:bg-zinc-800/50 text-zinc-400 dark:text-zinc-600 opacity-50 cursor-not-allowed" title="Solo gli utenti SUPERIOR possono eliminare gli articoli">
-                            <FiTrash2 className="h-4 w-4" />
-                          </div>
+                        {isSuperior && (
+                          <>
+                            <button 
+                              className="p-2 rounded-full bg-zinc-100 dark:bg-zinc-800 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors duration-200 cursor-pointer"
+                              onClick={() => {
+                                setEditingArticle(article);
+                                setEditFormData({
+                                  titolo: article.titolo,
+                                  contenuto: article.contenuto,
+                                  tag: article.tag,
+                                  autore: article.autore,
+                                  partecipanti: article.partecipanti || '',
+                                  isPrivate: article.isPrivate,
+                                  immagine: article.immagine,
+                                  additionalLinks: article.additionalLinks || [],
+                                  secondaryNotes: article.secondaryNotes || [],
+                                  newNoteContent: '',
+                                  newLinkUrl: '',
+                                  newLinkLabel: ''
+                                });
+                              }}
+                              title="Modifica articolo"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                            </button>
+                            <button 
+                              className={`p-2 rounded-full bg-zinc-100 dark:bg-zinc-800 transition-colors duration-200 cursor-pointer ${
+                                article.status === 'suspended'
+                                  ? 'text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/30'
+                                  : 'text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/30'
+                              }`}
+                              onClick={() => toggleArticleStatus(article)}
+                              title={article.status === 'suspended' ? "Riattiva articolo" : "Sospendi articolo"}
+                            >
+                              {article.status === 'suspended' ? (
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3l14 9-14 9V3z" />
+                                </svg>
+                              ) : (
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                              )}
+                            </button>
+                            <button 
+                              className="p-2 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-red-100 dark:hover:bg-red-900/30 hover:text-red-600 dark:hover:text-red-400 transition-colors duration-200 cursor-pointer"
+                              onClick={() => setDeleteConfirm(article.uuid)}
+                              title="Elimina articolo"
+                            >
+                              <FiTrash2 className="h-4 w-4" />
+                            </button>
+                          </>
                         )}
                       </div>
                     </td>

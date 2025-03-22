@@ -20,6 +20,7 @@ interface ArticleData {
   shared: number
   view: number
   likes?: string[]
+  status?: string
 }
 
 export default function FavoriteArticles() {
@@ -50,8 +51,11 @@ export default function FavoriteArticles() {
               uuid: childSnapshot.key || '',
               ...childSnapshot.val()
             }
-            // Filtra solo gli articoli che l'utente ha messo like
-            if (article.likes?.includes(user.uid)) {
+            // Filtra solo gli articoli che:
+            // 1. L'utente ha messo like
+            // 2. Hanno status 'accepted' o non hanno status (retrocompatibilità)
+            if (article.likes?.includes(user.uid) && 
+                (article.status === 'accepted' || !article.status)) {
               articlesData.push(article)
             }
           })

@@ -21,23 +21,6 @@ export default function Home() {
   const [displayCount, setDisplayCount] = useState(0);
   const animationRef = useRef<number | null>(null);
 
-  // Rimuovo il riferimento per l'effetto parallax
-  // const parallaxRef = useRef<HTMLDivElement>(null)
-  
-  // Rimuovo l'effetto parallax sullo scroll
-  // useEffect(() => {
-  //   const handleScroll = () => {
-  //     if (!parallaxRef.current) return
-      
-  //     const scrollY = window.scrollY
-  //     parallaxRef.current.style.transform = `translateY(${scrollY * 0.2}px)`
-  //     parallaxRef.current.style.opacity = `${1 - scrollY * 0.002}`
-  //   }
-    
-  //   window.addEventListener('scroll', handleScroll)
-  //   return () => window.removeEventListener('scroll', handleScroll)
-  // }, [])
-
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
