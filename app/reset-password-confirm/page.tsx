@@ -42,6 +42,28 @@ function ResetPasswordForm() {
     
     setOobCode(code)
     
+    // Verifica se questo oobCode è già stato utilizzato con successo
+    try {
+      const usedResetTokens = JSON.parse(localStorage.getItem('usedResetPasswordTokens') || '[]');
+      if (usedResetTokens.includes(code)) {
+        console.log("Questo codice di reset è già stato utilizzato. Reindirizzamento...");
+        setMessage({ 
+          type: "info", 
+          text: "Questo link è già stato utilizzato. Reindirizzamento alla pagina di accesso..." 
+        });
+        
+        // Reindirizza alla pagina di login dopo un breve ritardo
+        setTimeout(() => {
+          router.push('/access')
+        }, 1500);
+        
+        return;
+      }
+    } catch (err) {
+      console.error("Errore nel controllo dei token di reset utilizzati:", err);
+      // Continua con la verifica normale
+    }
+    
     // Verifica il codice di reset e ottieni l'email associata
     const verifyCode = async () => {
       let attempts = 0;
@@ -171,15 +193,29 @@ function ResetPasswordForm() {
     
     try {
       await confirmPasswordReset(auth, oobCode, password)
+      
+      // Salva il token nel localStorage per evitare riutilizzi
+      try {
+        const usedResetTokens = JSON.parse(localStorage.getItem('usedResetPasswordTokens') || '[]');
+        if (!usedResetTokens.includes(oobCode)) {
+          usedResetTokens.push(oobCode);
+          localStorage.setItem('usedResetPasswordTokens', JSON.stringify(usedResetTokens));
+          console.log("Token di reset salvato nel localStorage");
+        }
+      } catch (err) {
+        console.error("Errore nel salvare il token di reset:", err);
+      }
+      
       setMessage({ 
         type: "success", 
-        text: "Password reimpostata con successo! Ora puoi accedere con la nuova password." 
+        text: "Password reimpostata con successo! Reindirizzamento in corso..." 
       })
       
-      // Reindirizza alla pagina di login dopo alcuni secondi
+      // Reindirizza alla pagina di login dopo un tempo più breve
+      console.log("Reindirizzamento alla pagina di accesso dopo reset password riuscito");
       setTimeout(() => {
         router.push('/access')
-      }, 3000)
+      }, 1500)
     } catch (error) {
       if (error instanceof FirebaseError) {
         setMessage({ type: "error", text: `Si è verificato un errore: ${error.message}` })

@@ -41,6 +41,28 @@ function VerifyEmailContent() {
         return;
       }
       
+      // Verifica se questo oobCode è già stato utilizzato con successo
+      // e in tal caso, reindirizza subito senza ricontrollare
+      try {
+        const verifiedTokens = JSON.parse(localStorage.getItem('verifiedEmailTokens') || '[]');
+        if (verifiedTokens.includes(oobCode)) {
+          console.log("Questo codice è già stato verificato con successo in precedenza");
+          setVerificationStatus("success");
+          setVerificationMessage("Email verificata con successo! Reindirizzamento in corso...");
+          setLoading(false);
+          
+          // Reindirizza alla home dopo un breve ritardo
+          setTimeout(() => {
+            router.push('/');
+          }, 1500);
+          
+          return;
+        }
+      } catch (err) {
+        console.error("Errore nel controllo dei token verificati:", err);
+        // Continua con la verifica normale
+      }
+      
       let attempts = 0;
       const maxAttempts = 3;
       
@@ -53,7 +75,19 @@ function VerifyEmailContent() {
           await applyActionCode(auth, oobCode);
           console.log("Verifica email riuscita!");
           setVerificationStatus("success");
-          setVerificationMessage("Email verificata con successo! Puoi chiudere questa finestra o tornare alla home.");
+          setVerificationMessage("Email verificata con successo! Reindirizzamento in corso...");
+          
+          // Salva il token nel localStorage per evitare ricontrolli inutili
+          try {
+            const verifiedTokens = JSON.parse(localStorage.getItem('verifiedEmailTokens') || '[]');
+            if (!verifiedTokens.includes(oobCode)) {
+              verifiedTokens.push(oobCode);
+              localStorage.setItem('verifiedEmailTokens', JSON.stringify(verifiedTokens));
+              console.log("Token salvato nel localStorage");
+            }
+          } catch (err) {
+            console.error("Errore nel salvare il token verificato:", err);
+          }
           
           // Ricarica le informazioni dell'utente se disponibile
           if (user) {
@@ -62,6 +96,13 @@ function VerifyEmailContent() {
           }
           
           setLoading(false);
+          
+          // Reindirizza automaticamente l'utente alla home dopo una verifica riuscita
+          setTimeout(() => {
+            console.log("Reindirizzamento alla home dopo verifica riuscita");
+            router.push('/');
+          }, 2000);
+          
           return true; // Verifica riuscita
         } catch (error) {
           console.error(`Errore durante il tentativo ${attempts} di verifica:`, error);
@@ -78,8 +119,28 @@ function VerifyEmailContent() {
               if (userVerified) {
                 console.log("L'utente risulta verificato nonostante l'errore!");
                 setVerificationStatus("success");
-                setVerificationMessage("Email verificata con successo! Puoi chiudere questa finestra o tornare alla home.");
+                setVerificationMessage("Email verificata con successo! Reindirizzamento in corso...");
+                
+                // Salva il token nel localStorage per evitare ricontrolli inutili
+                try {
+                  const verifiedTokens = JSON.parse(localStorage.getItem('verifiedEmailTokens') || '[]');
+                  if (!verifiedTokens.includes(oobCode)) {
+                    verifiedTokens.push(oobCode);
+                    localStorage.setItem('verifiedEmailTokens', JSON.stringify(verifiedTokens));
+                    console.log("Token salvato nel localStorage (verifica riuscita nonostante errore)");
+                  }
+                } catch (err) {
+                  console.error("Errore nel salvare il token verificato:", err);
+                }
+                
                 setLoading(false);
+                
+                // Reindirizza automaticamente l'utente alla home
+                setTimeout(() => {
+                  console.log("Reindirizzamento alla home dopo verifica riuscita");
+                  router.push('/');
+                }, 2000);
+                
                 return true; // Utente verificato
               }
             } catch (reloadError) {
@@ -365,32 +426,9 @@ function VerifyEmailContent() {
               <h2 className="text-xl font-bold text-zinc-200 mb-2">Email verificata con successo!</h2>
               <p className="text-zinc-300 text-sm mb-4">
                 {user 
-                  ? "La tua email è stata verificata correttamente. Ora puoi utilizzare tutte le funzionalità del sito."
-                  : "La tua email è stata verificata correttamente. Effettua l'accesso per utilizzare tutte le funzionalità del sito."}
+                  ? "La tua email è stata verificata correttamente. Verrai reindirizzato alla home..."
+                  : "La tua email è stata verificata correttamente. Verrai reindirizzato alla home..."}
               </p>
-              <div className="flex flex-col gap-4">
-                <Link href="/" className="w-full">
-                  <Button
-                    variant="solid"
-                    className="w-full py-4 bg-gradient-to-r from-amber-500 to-orange-600 rounded-xl text-white shadow-lg cursor-pointer transition-all duration-500 ease-in-out hover:opacity-90 hover:shadow-xl hover:shadow-amber-500/20 hover:scale-[1.02] text-base font-medium tracking-wide"
-                  >
-                    <FiHome className="mr-2 h-5 w-5" />
-                    Vai alla home
-                  </Button>
-                </Link>
-                
-                {!user && (
-                  <Link href="/access" className="w-full">
-                    <Button
-                      variant="ghost"
-                      className="w-full py-4 bg-zinc-800/30 backdrop-blur-sm text-zinc-200 border border-zinc-700 rounded-xl shadow-md transition-all duration-300 hover:shadow-lg hover:bg-zinc-700/60 hover:scale-[1.02] hover:border-zinc-700/60"
-                    >
-                      <FiMail className="mr-2 h-5 w-5" />
-                      Accedi
-                    </Button>
-                  </Link>
-                )}
-              </div>
             </div>
           )}
           
