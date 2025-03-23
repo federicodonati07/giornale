@@ -22,6 +22,9 @@ function AuthActionRouter() {
   
   useEffect(() => {
     const handleRouting = () => {
+      // Log completo di tutti i parametri ricevuti per debug
+      console.log("Auth Action Parameters:", Object.fromEntries(searchParams.entries()));
+      
       // Ottieni il parametro mode dall'URL
       const mode = searchParams.get("mode")
       // Ottieni il parametro oobCode dall'URL (inviato da Firebase)
@@ -33,9 +36,16 @@ function AuthActionRouter() {
         return
       }
       
-      // Prepara la query string da passare alle pagine di destinazione
+      // Prepara la query string passando TUTTI i parametri originali
+      // Questo garantisce che tutti i parametri necessari vengano trasferiti
       const queryParams = new URLSearchParams()
-      queryParams.set("oobCode", oobCode)
+      
+      // Copia tutti i parametri originali dall'URL
+      searchParams.forEach((value, key) => {
+        queryParams.set(key, value)
+      })
+      
+      console.log("Query params finali:", queryParams.toString());
       
       // Firebase aggiunge automaticamente mode nei suoi link
       // Usiamo il mode per determinare la pagina di destinazione
@@ -47,17 +57,27 @@ function AuthActionRouter() {
         // Reindirizza alla pagina di reset password
         router.push(`/reset-password-confirm?${queryParams.toString()}`)
       } else {
-        console.error("Parametro mode non valido o mancante")
-        router.push("/") // Reindirizza alla home se il mode non è valido
+        // Se non c'è un parametro mode esplicito, proviamo a determinare l'azione dal contesto
+        console.log("Mode non specificato, provo a determinare l'azione dal contesto");
+        
+        // Se c'è continuePath, potrebbe contenere indizi sull'azione da eseguire
+        const continueUrl = searchParams.get("continueUrl") || "";
+        if (continueUrl.includes("verify")) {
+          console.log("Rilevata azione di verifica email dal continueUrl");
+          router.push(`/verify-email?${queryParams.toString()}`)
+        } else if (continueUrl.includes("reset")) {
+          console.log("Rilevata azione di reset password dal continueUrl");
+          router.push(`/reset-password-confirm?${queryParams.toString()}`)
+        } else {
+          console.error("Impossibile determinare il tipo di azione, reindirizzo alla home");
+          router.push("/") // Reindirizza alla home se il mode non è valido
+        }
       }
     }
     
-    // Esegui il routing con un piccolo ritardo per assicurarsi che tutti i parametri siano caricati
-    const timeout = setTimeout(() => {
-      handleRouting()
-    }, 100)
+    // Esegui il routing immediatamente
+    handleRouting()
     
-    return () => clearTimeout(timeout)
   }, [router, searchParams])
   
   return <LoadingState />

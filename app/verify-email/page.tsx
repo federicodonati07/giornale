@@ -25,61 +25,111 @@ function VerifyEmailContent() {
   // Verificare il token dell'URL e applicare la verifica
   useEffect(() => {
     const verifyEmail = async () => {
-      const oobCode = searchParams.get("oobCode")
+      // Log tutti i parametri dell'URL
+      console.log("Verify Email Parameters:", Object.fromEntries(searchParams.entries()));
       
-      // Gestisci sia il nostro parametro personalizzato 'verify' che il parametro standard di Firebase 'verifyEmail'
-      if (oobCode) {
+      const oobCode = searchParams.get("oobCode");
+      const apiKey = searchParams.get("apiKey");
+      const continueUrl = searchParams.get("continueUrl");
+      
+      console.log("oobCode:", oobCode);
+      console.log("apiKey:", apiKey);
+      console.log("continueUrl:", continueUrl);
+      
+      if (!oobCode) {
+        setLoading(false);
+        return;
+      }
+      
+      let attempts = 0;
+      const maxAttempts = 3;
+      
+      const attemptVerification = async () => {
+        attempts++;
+        console.log(`Tentativo ${attempts} di verifica email...`);
+        
         try {
           // Applica il codice di verifica
-          await applyActionCode(auth, oobCode)
-          setVerificationStatus("success")
-          setVerificationMessage("Email verificata con successo! Puoi chiudere questa finestra o tornare alla home.")
+          await applyActionCode(auth, oobCode);
+          console.log("Verifica email riuscita!");
+          setVerificationStatus("success");
+          setVerificationMessage("Email verificata con successo! Puoi chiudere questa finestra o tornare alla home.");
           
           // Ricarica le informazioni dell'utente se disponibile
           if (user) {
-            await reload(user)
+            await reload(user);
+            console.log("User reloaded, emailVerified:", user.emailVerified);
           }
+          
+          setLoading(false);
+          return true; // Verifica riuscita
         } catch (error) {
-          console.error("Errore durante la verifica dell'email:", error)
+          console.error(`Errore durante il tentativo ${attempts} di verifica:`, error);
           
           // Controlla comunque se l'utente è verificato 
-          // perché potrebbe esserlo nonostante l'errore
+          let userVerified = false;
+          
           if (user) {
-            await reload(user)
-            
-            // Se l'utente è verificato, considera la verifica come riuscita
-            if (user.emailVerified) {
-              setVerificationStatus("success")
-              setVerificationMessage("Email verificata con successo! Puoi chiudere questa finestra o tornare alla home.")
-              return
+            try {
+              await reload(user);
+              console.log("Stato utente dopo reload:", user.emailVerified);
+              userVerified = user.emailVerified;
+              
+              if (userVerified) {
+                console.log("L'utente risulta verificato nonostante l'errore!");
+                setVerificationStatus("success");
+                setVerificationMessage("Email verificata con successo! Puoi chiudere questa finestra o tornare alla home.");
+                setLoading(false);
+                return true; // Utente verificato
+              }
+            } catch (reloadError) {
+              console.error("Errore durante il reload dell'utente:", reloadError);
             }
           }
           
-          // Solo se l'utente non è verificato mostriamo un errore
-          setVerificationStatus("error")
+          // Se abbiamo altri tentativi disponibili e l'errore è di tipo invalid-action-code
+          // potrebbe essere un problema temporaneo, ritentiamo
+          if (
+            attempts < maxAttempts && 
+            error instanceof FirebaseError && 
+            error.code === 'auth/invalid-action-code'
+          ) {
+            console.log(`Riprovo tra 1.5 secondi (tentativo ${attempts}/${maxAttempts})...`);
+            return false; // Riprova
+          }
+          
+          // Se abbiamo esaurito i tentativi o l'errore è diverso, mostriamo l'errore
+          setVerificationStatus("error");
           
           if (error instanceof FirebaseError) {
-            // Gestione specifica per codice già utilizzato
             if (error.code === 'auth/invalid-action-code') {
-              setVerificationMessage("Questo link di verifica non è più valido o è già stato utilizzato.")
+              setVerificationMessage("Questo link di verifica non è più valido o è già stato utilizzato.");
             } else {
-              setVerificationMessage(`Errore: ${error.message}`)
+              setVerificationMessage(`Errore: ${error.message}`);
             }
           } else {
-            setVerificationMessage("Si è verificato un errore durante la verifica dell'email.")
+            setVerificationMessage("Si è verificato un errore durante la verifica dell'email.");
           }
-        } finally {
-          setLoading(false)
+          
+          setLoading(false);
+          return true; // Non riprova più
         }
-      } else {
-        // Se non c'è un oobCode ma l'utente è in attesa di verifica
-        // mostriamo l'interfaccia di attesa
-        setLoading(false)
-      }
-    }
+      };
+      
+      // Funzione per gestire i tentativi con ritardo
+      const runVerificationWithRetries = async () => {
+        const success = await attemptVerification();
+        if (!success && attempts < maxAttempts) {
+          // Attende 1.5 secondi prima di riprovare
+          setTimeout(runVerificationWithRetries, 1500);
+        }
+      };
+      
+      runVerificationWithRetries();
+    };
     
-    verifyEmail()
-  }, [searchParams, user])
+    verifyEmail();
+  }, [searchParams, user]);
   
   // Verificare lo stato dell'utente
   useEffect(() => {
@@ -169,16 +219,19 @@ function VerifyEmailContent() {
     setResendLoading(true);
     
     try {
-      // Configurazione URL personalizzato per la verifica email
+      // Configurazione URL diretto alla pagina di verifica email
+      // invece di passare per auth-action
       const actionCodeSettings = {
-        url: `${window.location.origin}/auth-action?mode=verify`,
+        url: `${window.location.origin}/verify-email`,
         handleCodeInApp: true
       };
+      
+      console.log("Invio email di verifica con URL:", actionCodeSettings.url);
       
       // Invia email di verifica con URL personalizzato
       await sendEmailVerification(user, actionCodeSettings);
       
-      setVerificationMessage("Email di verifica inviata nuovamente!");
+      setVerificationMessage("Email di verifica inviata nuovamente! Controlla la tua casella di posta.");
       setCanResend(false);
       setCountdown(60);
     } catch (error) {

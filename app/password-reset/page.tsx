@@ -24,11 +24,13 @@ export default function PasswordResetPage() {
     setMessage(null)
     
     try {
-      // Configurazione dell'URL di azione personalizzato
+      // Configurazione dell'URL diretto senza passare per auth-action
       const actionCodeSettings = {
-        url: `${window.location.origin}/auth-action?mode=reset`,
+        url: `${window.location.origin}/reset-password-confirm`,
         handleCodeInApp: true
       }
+      
+      console.log("Invio email di reset con URL:", actionCodeSettings.url);
       
       await sendPasswordResetEmail(auth, email, actionCodeSettings)
       setMessage({ 

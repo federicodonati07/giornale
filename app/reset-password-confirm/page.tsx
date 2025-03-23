@@ -24,8 +24,12 @@ function ResetPasswordForm() {
   const [passwordStrength, setPasswordStrength] = useState(0)
   
   useEffect(() => {
+    // Log tutti i parametri dell'URL
+    console.log("Reset Password Parameters:", Object.fromEntries(searchParams.entries()));
+    
     // Ottieni il codice di reset dalla query string
     const code = searchParams.get("oobCode")
+    console.log("oobCode ricevuto:", code);
     
     // Nota: non verificheremo più il parametro mode, ma ci fidiamo solo del oobCode
     if (!code) {
@@ -40,53 +44,79 @@ function ResetPasswordForm() {
     
     // Verifica il codice di reset e ottieni l'email associata
     const verifyCode = async () => {
-      try {
-        console.log("Tentativo di verifica del codice:", code);
-        const email = await verifyPasswordResetCode(auth, code)
-        console.log("Codice verificato con successo per email:", email);
-        setEmail(email)
-        setMessage({ 
-          type: "info", 
-          text: `Imposta una nuova password per ${email}` 
-        })
-      } catch (error) {
-        console.error("Error verifying reset code:", error);
-        // Log dettagliato dell'errore per debug
-        if (error instanceof FirebaseError) {
-          console.error("Firebase error code:", error.code);
-          console.error("Firebase error message:", error.message);
-        }
+      let attempts = 0;
+      const maxAttempts = 3;
+      
+      const attemptVerification = async () => {
+        attempts++;
+        console.log(`Tentativo ${attempts} di verifica del codice di reset...`);
         
-        if (error instanceof FirebaseError) {
-          // Gestisci i vari errori di Firebase
-          if (error.code === 'auth/invalid-action-code') {
-            setMessage({ 
-              type: "error", 
-              text: "Questo link di reset è scaduto o è già stato utilizzato. Richiedi un nuovo link." 
-            })
-          } else if (error.code === 'auth/user-disabled') {
-            setMessage({ 
-              type: "error", 
-              text: "Questo account è stato disabilitato. Contatta il supporto." 
-            })
-          } else if (error.code === 'auth/user-not-found') {
-            setMessage({ 
-              type: "error", 
-              text: "Non esiste nessun account associato a questa email." 
-            })
+        try {
+          console.log("Tentativo di verifica del codice:", code);
+          const email = await verifyPasswordResetCode(auth, code)
+          console.log("Codice verificato con successo per email:", email);
+          setEmail(email)
+          setMessage({ 
+            type: "info", 
+            text: `Imposta una nuova password per ${email}` 
+          })
+          return true; // Verifica riuscita
+        } catch (error) {
+          console.error("Error verifying reset code:", error);
+          // Log dettagliato dell'errore per debug
+          if (error instanceof FirebaseError) {
+            console.error("Firebase error code:", error.code);
+            console.error("Firebase error message:", error.message);
+            
+            // Se abbiamo altri tentativi e l'errore è di tipo invalid-action-code
+            // potrebbe essere un problema temporaneo, ritentiamo
+            if (attempts < maxAttempts && error.code === 'auth/invalid-action-code') {
+              console.log(`Riprovo tra 1.5 secondi (tentativo ${attempts}/${maxAttempts})...`);
+              return false; // Riprova
+            }
+            
+            // Gestisci i vari errori di Firebase
+            if (error.code === 'auth/invalid-action-code') {
+              setMessage({ 
+                type: "error", 
+                text: "Questo link di reset è scaduto o è già stato utilizzato. Richiedi un nuovo link." 
+              })
+            } else if (error.code === 'auth/user-disabled') {
+              setMessage({ 
+                type: "error", 
+                text: "Questo account è stato disabilitato. Contatta il supporto." 
+              })
+            } else if (error.code === 'auth/user-not-found') {
+              setMessage({ 
+                type: "error", 
+                text: "Non esiste nessun account associato a questa email." 
+              })
+            } else {
+              setMessage({ 
+                type: "error", 
+                text: `Si è verificato un errore: ${error.message}` 
+              })
+            }
           } else {
             setMessage({ 
               type: "error", 
-              text: `Si è verificato un errore: ${error.message}` 
+              text: "Il link di reset non è più valido. Richiedi un nuovo link." 
             })
           }
-        } else {
-          setMessage({ 
-            type: "error", 
-            text: "Il link di reset non è più valido. Richiedi un nuovo link." 
-          })
+          return true; // Non riprova più (a meno che non abbiamo specificato return false sopra)
         }
-      }
+      };
+      
+      // Funzione per gestire i tentativi con ritardo
+      const runVerificationWithRetries = async () => {
+        const success = await attemptVerification();
+        if (!success && attempts < maxAttempts) {
+          // Attende 1.5 secondi prima di riprovare
+          setTimeout(runVerificationWithRetries, 1500);
+        }
+      };
+      
+      runVerificationWithRetries();
     }
     
     verifyCode()
