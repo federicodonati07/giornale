@@ -12,6 +12,7 @@ import { FirebaseError } from "firebase/app"
 import { auth, db, app } from "../../firebase"
 import { motion, useScroll, useTransform } from "framer-motion"
 import { v4 as uuidv4 } from 'uuid'
+import { Button } from "@/app/components/ui/button"
 
 interface ArticleData {
   uuid: string
@@ -58,6 +59,7 @@ export default function ManageArticlesPage() {
     newLinkUrl: '',
     newLinkLabel: ''
   })
+  const [displayedArticles, setDisplayedArticles] = useState<number>(5)
 
   // Add scroll tracking for parallax effects
   const { scrollY } = useScroll()
@@ -471,6 +473,11 @@ export default function ManageArticlesPage() {
       ...prev,
       additionalLinks: prev.additionalLinks.filter((_, index) => index !== indexToRemove)
     }));
+  };
+
+  // Function to increase displayed articles by 5
+  const loadMoreArticles = () => {
+    setDisplayedArticles(prev => prev + 5);
   };
 
   if (loading) {
@@ -1046,7 +1053,7 @@ export default function ManageArticlesPage() {
             y: tableY,
             opacity: tableOpacity
           }}
-          className="backdrop-blur-xl bg-white/15 dark:bg-zinc-800/20 border border-white/30 dark:border-white/10 rounded-2xl p-4 overflow-x-auto transition-all duration-500"
+          className="backdrop-blur-xl bg-white/15 dark:bg-zinc-800/20 border border-white/30 dark:border-white/10 rounded-2xl p-4 overflow-x-auto max-h-[70vh] overflow-y-auto transition-all duration-500"
         >
           {filteredArticles.length > 0 ? (
             <table className="w-full border-collapse">
@@ -1079,7 +1086,7 @@ export default function ManageArticlesPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredArticles.map((article, index) => (
+                {filteredArticles.slice(0, displayedArticles).map((article, index) => (
                   <motion.tr 
                     key={article.uuid} 
                     className="border-b border-white/10 hover:bg-white/5 dark:hover:bg-zinc-800/40 transition-colors duration-200"
@@ -1276,6 +1283,18 @@ export default function ManageArticlesPage() {
             </motion.div>
           )}
         </motion.div>
+        
+        {/* Move the Load More button inside the scrollable container */}
+        {filteredArticles.length > displayedArticles && (
+          <div className="flex justify-center mt-6 sticky bottom-4 z-10">
+            <Button 
+              onClick={loadMoreArticles}
+              className="bg-blue-600 text-white hover:bg-blue-700 transition-colors duration-200 px-5 py-2 rounded-xl shadow-lg"
+            >
+              Mostra altri 5 articoli
+            </Button>
+          </div>
+        )}
       </div>
     </motion.main>
   )
