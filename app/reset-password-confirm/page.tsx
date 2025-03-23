@@ -26,12 +26,9 @@ function ResetPasswordForm() {
   useEffect(() => {
     // Ottieni il codice di reset dalla query string
     const code = searchParams.get("oobCode")
-    const mode = searchParams.get("mode")
     
-    // Verifica se siamo nella modalità reset password (sia tramite il nostro parametro che tramite quello di Firebase)
-    const isResetPasswordMode = mode === "reset" || mode === "resetPassword"
-    
-    if (!code || !isResetPasswordMode) {
+    // Nota: non verificheremo più il parametro mode, ma ci fidiamo solo del oobCode
+    if (!code) {
       setMessage({ 
         type: "error", 
         text: "Link di reset non valido. Richiedi un nuovo link." 
@@ -44,7 +41,9 @@ function ResetPasswordForm() {
     // Verifica il codice di reset e ottieni l'email associata
     const verifyCode = async () => {
       try {
+        console.log("Tentativo di verifica del codice:", code);
         const email = await verifyPasswordResetCode(auth, code)
+        console.log("Codice verificato con successo per email:", email);
         setEmail(email)
         setMessage({ 
           type: "info", 
@@ -52,10 +51,41 @@ function ResetPasswordForm() {
         })
       } catch (error) {
         console.error("Error verifying reset code:", error);
-        setMessage({ 
-          type: "error", 
-          text: "Il link di reset non è più valido. Richiedi un nuovo link." 
-        })
+        // Log dettagliato dell'errore per debug
+        if (error instanceof FirebaseError) {
+          console.error("Firebase error code:", error.code);
+          console.error("Firebase error message:", error.message);
+        }
+        
+        if (error instanceof FirebaseError) {
+          // Gestisci i vari errori di Firebase
+          if (error.code === 'auth/invalid-action-code') {
+            setMessage({ 
+              type: "error", 
+              text: "Questo link di reset è scaduto o è già stato utilizzato. Richiedi un nuovo link." 
+            })
+          } else if (error.code === 'auth/user-disabled') {
+            setMessage({ 
+              type: "error", 
+              text: "Questo account è stato disabilitato. Contatta il supporto." 
+            })
+          } else if (error.code === 'auth/user-not-found') {
+            setMessage({ 
+              type: "error", 
+              text: "Non esiste nessun account associato a questa email." 
+            })
+          } else {
+            setMessage({ 
+              type: "error", 
+              text: `Si è verificato un errore: ${error.message}` 
+            })
+          }
+        } else {
+          setMessage({ 
+            type: "error", 
+            text: "Il link di reset non è più valido. Richiedi un nuovo link." 
+          })
+        }
       }
     }
     
