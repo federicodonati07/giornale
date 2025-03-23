@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { FiArrowLeft, FiMail, FiCheck, FiRefreshCw, FiHome, FiX } from "react-icons/fi"
@@ -10,7 +10,8 @@ import { FirebaseError } from "firebase/app"
 import { auth } from "../firebase"
 import { motion } from "framer-motion"
 
-export default function VerifyEmailPage() {
+// Componente che usa useSearchParams
+function VerifyEmailContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [user, setUser] = useState<User | null>(null)
@@ -324,5 +325,26 @@ export default function VerifyEmailPage() {
         </motion.div>
       </div>
     </main>
+  );
+}
+
+// Loading component to show while the form is loading
+function LoadingState() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-zinc-900 to-zinc-800 flex flex-col items-center justify-center p-4">
+      <div className="w-full max-w-md text-center">
+        <div className="animate-spin h-12 w-12 border-4 border-zinc-300 border-t-amber-500 rounded-full mx-auto mb-4"></div>
+        <p className="text-zinc-300">Caricamento...</p>
+      </div>
+    </div>
+  );
+}
+
+// Main component with Suspense boundary
+export default function VerifyEmailPage() {
+  return (
+    <Suspense fallback={<LoadingState />}>
+      <VerifyEmailContent />
+    </Suspense>
   );
 } 
