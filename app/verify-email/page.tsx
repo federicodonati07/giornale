@@ -44,22 +44,50 @@ function VerifyEmailContent() {
           }, 2000)
         } catch (error) {
           console.error("Errore durante la verifica dell'email:", error)
+          
+          // Controlla comunque se l'utente è verificato 
+          // perché potrebbe esserlo nonostante l'errore
+          if (user) {
+            await reload(user)
+            
+            // Se l'utente è verificato, considera la verifica come riuscita
+            if (user.emailVerified) {
+              setVerificationStatus("success")
+              setVerificationMessage("Email verificata con successo! Reindirizzamento in corso...")
+              setTimeout(() => {
+                router.push('/')
+              }, 2000)
+              return
+            }
+          }
+          
+          // Solo se l'utente non è verificato mostriamo un errore
           setVerificationStatus("error")
           
           if (error instanceof FirebaseError) {
             // Gestione specifica per codice già utilizzato
             if (error.code === 'auth/invalid-action-code') {
-              // Controlla se l'utente è già verificato
-              if (user && user.emailVerified) {
-                setVerificationStatus("success")
-                setVerificationMessage("Email già verificata! Reindirizzamento in corso...")
-                setTimeout(() => {
-                  router.push('/')
-                }, 2000)
-                return
-              } else {
-                setVerificationMessage("Questo link di verifica non è più valido o è già stato utilizzato.")
-              }
+              // Aggiungi un breve ritardo per dare a Firebase il tempo di aggiornare lo stato
+              setTimeout(async () => {
+                try {
+                  if (user) {
+                    await reload(user)
+                    if (user.emailVerified) {
+                      setVerificationStatus("success")
+                      setVerificationMessage("Email verificata con successo! Reindirizzamento in corso...")
+                      setTimeout(() => {
+                        router.push('/')
+                      }, 2000)
+                      return
+                    }
+                  }
+                  // Se dopo il reload l'email non risulta ancora verificata
+                  setVerificationMessage("Questo link di verifica non è più valido o è già stato utilizzato.")
+                } catch (reloadError) {
+                  console.error("Errore durante il reload dell'utente:", reloadError)
+                  setVerificationMessage("Si è verificato un errore durante la verifica. Riprova.")
+                }
+              }, 1500) // Attendi 1.5 secondi prima di controllare
             } else {
               setVerificationMessage(`Errore: ${error.message}`)
             }
