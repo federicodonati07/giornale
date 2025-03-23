@@ -26,7 +26,7 @@ export default function PasswordResetPage() {
     try {
       // Configurazione dell'URL di azione personalizzato
       const actionCodeSettings = {
-        url: `${window.location.origin}/reset-password-confirm`,
+        url: `${window.location.origin}/auth-action?mode=reset`,
         handleCodeInApp: true
       }
       

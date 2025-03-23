@@ -28,7 +28,8 @@ function VerifyEmailContent() {
       const oobCode = searchParams.get("oobCode")
       const mode = searchParams.get("mode")
       
-      if (mode === "verifyEmail" && oobCode) {
+      // Gestisci sia il nostro parametro personalizzato 'verify' che il parametro standard di Firebase 'verifyEmail'
+      if ((mode === "verifyEmail" || mode === "verify") && oobCode) {
         try {
           await applyActionCode(auth, oobCode)
           setVerificationStatus("success")
@@ -182,7 +183,15 @@ function VerifyEmailContent() {
     setResendLoading(true);
     
     try {
-      await sendEmailVerification(user);
+      // Configurazione URL personalizzato per la verifica email
+      const actionCodeSettings = {
+        url: `${window.location.origin}/auth-action?mode=verify`,
+        handleCodeInApp: true
+      };
+      
+      // Invia email di verifica con URL personalizzato
+      await sendEmailVerification(user, actionCodeSettings);
+      
       setVerificationMessage("Email di verifica inviata nuovamente!");
       setCanResend(false);
       setCountdown(60);

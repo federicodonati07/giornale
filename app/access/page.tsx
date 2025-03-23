@@ -147,8 +147,16 @@ export default function AccessPage() {
       if (isRegistering) {
         // Crea l'utente
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        // Invia email di verifica
-        await sendEmailVerification(userCredential.user);
+        
+        // Configurazione URL personalizzato per la verifica email
+        const actionCodeSettings = {
+          url: `${window.location.origin}/auth-action?mode=verify`,
+          handleCodeInApp: true
+        };
+        
+        // Invia email di verifica con URL personalizzato
+        await sendEmailVerification(userCredential.user, actionCodeSettings);
+        
         showNotification("success", "Registrazione avvenuta con successo! Ti abbiamo inviato un'email di verifica.");
         // Reindirizza alla pagina di verifica
         setTimeout(() => {

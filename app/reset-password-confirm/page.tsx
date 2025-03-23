@@ -26,8 +26,12 @@ function ResetPasswordForm() {
   useEffect(() => {
     // Ottieni il codice di reset dalla query string
     const code = searchParams.get("oobCode")
+    const mode = searchParams.get("mode")
     
-    if (!code) {
+    // Verifica se siamo nella modalità reset password (sia tramite il nostro parametro che tramite quello di Firebase)
+    const isResetPasswordMode = mode === "reset" || mode === "resetPassword"
+    
+    if (!code || !isResetPasswordMode) {
       setMessage({ 
         type: "error", 
         text: "Link di reset non valido. Richiedi un nuovo link." 
