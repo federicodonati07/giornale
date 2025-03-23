@@ -38,26 +38,17 @@ function AuthActionRouter() {
       queryParams.set("oobCode", oobCode)
       
       // Firebase aggiunge automaticamente mode nei suoi link
-      // ma usiamo il nostro parametro mode personalizzato per il routing
+      // Usiamo il mode per determinare la pagina di destinazione
       
-      if (mode === "verify") {
+      if (mode === "verify" || mode === "verifyEmail") {
         // Reindirizza alla pagina di verifica email
         router.push(`/verify-email?${queryParams.toString()}`)
-      } else if (mode === "reset") {
+      } else if (mode === "reset" || mode === "resetPassword") {
         // Reindirizza alla pagina di reset password
         router.push(`/reset-password-confirm?${queryParams.toString()}`)
       } else {
-        // Se il nostro parametro mode non è specificato, proviamo a usare il mode di Firebase
-        const firebaseMode = searchParams.get("mode")
-        
-        if (firebaseMode === "verifyEmail") {
-          router.push(`/verify-email?${queryParams.toString()}`)
-        } else if (firebaseMode === "resetPassword") {
-          router.push(`/reset-password-confirm?${queryParams.toString()}`)
-        } else {
-          console.error("Parametro mode non valido o mancante")
-          router.push("/") // Reindirizza alla home se il mode non è valido
-        }
+        console.error("Parametro mode non valido o mancante")
+        router.push("/") // Reindirizza alla home se il mode non è valido
       }
     }
     
