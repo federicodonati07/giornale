@@ -26,23 +26,19 @@ function VerifyEmailContent() {
   useEffect(() => {
     const verifyEmail = async () => {
       const oobCode = searchParams.get("oobCode")
-      const mode = searchParams.get("mode")
       
       // Gestisci sia il nostro parametro personalizzato 'verify' che il parametro standard di Firebase 'verifyEmail'
-      if ((mode === "verifyEmail" || mode === "verify") && oobCode) {
+      if (oobCode) {
         try {
+          // Applica il codice di verifica
           await applyActionCode(auth, oobCode)
           setVerificationStatus("success")
-          setVerificationMessage("Email verificata con successo! Reindirizzamento in corso...")
+          setVerificationMessage("Email verificata con successo! Puoi chiudere questa finestra o tornare alla home.")
           
-          // Ricarica le informazioni dell'utente
+          // Ricarica le informazioni dell'utente se disponibile
           if (user) {
             await reload(user)
           }
-          
-          setTimeout(() => {
-            router.push('/')
-          }, 2000)
         } catch (error) {
           console.error("Errore durante la verifica dell'email:", error)
           
@@ -54,10 +50,7 @@ function VerifyEmailContent() {
             // Se l'utente è verificato, considera la verifica come riuscita
             if (user.emailVerified) {
               setVerificationStatus("success")
-              setVerificationMessage("Email verificata con successo! Reindirizzamento in corso...")
-              setTimeout(() => {
-                router.push('/')
-              }, 2000)
+              setVerificationMessage("Email verificata con successo! Puoi chiudere questa finestra o tornare alla home.")
               return
             }
           }
@@ -68,27 +61,7 @@ function VerifyEmailContent() {
           if (error instanceof FirebaseError) {
             // Gestione specifica per codice già utilizzato
             if (error.code === 'auth/invalid-action-code') {
-              // Aggiungi un breve ritardo per dare a Firebase il tempo di aggiornare lo stato
-              setTimeout(async () => {
-                try {
-                  if (user) {
-                    await reload(user)
-                    if (user.emailVerified) {
-                      setVerificationStatus("success")
-                      setVerificationMessage("Email verificata con successo! Reindirizzamento in corso...")
-                      setTimeout(() => {
-                        router.push('/')
-                      }, 2000)
-                      return
-                    }
-                  }
-                  // Se dopo il reload l'email non risulta ancora verificata
-                  setVerificationMessage("Questo link di verifica non è più valido o è già stato utilizzato.")
-                } catch (reloadError) {
-                  console.error("Errore durante il reload dell'utente:", reloadError)
-                  setVerificationMessage("Si è verificato un errore durante la verifica. Riprova.")
-                }
-              }, 1500) // Attendi 1.5 secondi prima di controllare
+              setVerificationMessage("Questo link di verifica non è più valido o è già stato utilizzato.")
             } else {
               setVerificationMessage(`Errore: ${error.message}`)
             }
@@ -98,18 +71,31 @@ function VerifyEmailContent() {
         } finally {
           setLoading(false)
         }
+      } else {
+        // Se non c'è un oobCode ma l'utente è in attesa di verifica
+        // mostriamo l'interfaccia di attesa
+        setLoading(false)
       }
     }
     
     verifyEmail()
-  }, [searchParams, user, router])
+  }, [searchParams, user])
   
   // Verificare lo stato dell'utente
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      // Se c'è un oobCode (codice di verifica) nell'URL, procedi anche senza utente loggato
+      const oobCode = searchParams.get("oobCode");
+      
       if (!currentUser) {
-        // Se non c'è un utente loggato, reindirizza alla pagina di accesso
-        router.push('/access');
+        if (oobCode) {
+          // Se c'è un codice di verifica ma non un utente loggato, imposta solo loading a false
+          // per permettere alla verifica di procedere
+          setLoading(false);
+        } else {
+          // Se non c'è né codice di verifica né utente loggato, reindirizza alla pagina di accesso
+          router.push('/access');
+        }
         return;
       }
       
@@ -325,17 +311,33 @@ function VerifyEmailContent() {
               <FiCheck className="mx-auto h-12 w-12 text-green-500 mb-4" />
               <h2 className="text-xl font-bold text-zinc-200 mb-2">Email verificata con successo!</h2>
               <p className="text-zinc-300 text-sm mb-4">
-                La tua email è stata verificata correttamente. Ora puoi utilizzare tutte le funzionalità del sito.
+                {user 
+                  ? "La tua email è stata verificata correttamente. Ora puoi utilizzare tutte le funzionalità del sito."
+                  : "La tua email è stata verificata correttamente. Effettua l'accesso per utilizzare tutte le funzionalità del sito."}
               </p>
-              <Link href="/" className="w-full">
-                <Button
-                  variant="solid"
-                  className="w-full py-4 bg-gradient-to-r from-amber-500 to-orange-600 rounded-xl text-white shadow-lg cursor-pointer transition-all duration-500 ease-in-out hover:opacity-90 hover:shadow-xl hover:shadow-amber-500/20 hover:scale-[1.02] text-base font-medium tracking-wide"
-                >
-                  <FiHome className="mr-2 h-5 w-5" />
-                  Vai alla home
-                </Button>
-              </Link>
+              <div className="flex flex-col gap-4">
+                <Link href="/" className="w-full">
+                  <Button
+                    variant="solid"
+                    className="w-full py-4 bg-gradient-to-r from-amber-500 to-orange-600 rounded-xl text-white shadow-lg cursor-pointer transition-all duration-500 ease-in-out hover:opacity-90 hover:shadow-xl hover:shadow-amber-500/20 hover:scale-[1.02] text-base font-medium tracking-wide"
+                  >
+                    <FiHome className="mr-2 h-5 w-5" />
+                    Vai alla home
+                  </Button>
+                </Link>
+                
+                {!user && (
+                  <Link href="/access" className="w-full">
+                    <Button
+                      variant="ghost"
+                      className="w-full py-4 bg-zinc-800/30 backdrop-blur-sm text-zinc-200 border border-zinc-700 rounded-xl shadow-md transition-all duration-300 hover:shadow-lg hover:bg-zinc-700/60 hover:scale-[1.02] hover:border-zinc-700/60"
+                    >
+                      <FiMail className="mr-2 h-5 w-5" />
+                      Accedi
+                    </Button>
+                  </Link>
+                )}
+              </div>
             </div>
           )}
           
