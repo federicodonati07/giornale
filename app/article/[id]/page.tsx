@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import Image from "next/image"
 import { ref, get, update, increment, remove } from "firebase/database"
 import { db, auth, app } from "../../firebase"
-import { FiHeart, FiShare2, FiEye, FiClock, FiArrowLeft, FiLock, FiCheck, FiX } from "react-icons/fi"
+import { FiHeart, FiShare2, FiEye, FiClock, FiArrowLeft, FiCheck, FiX } from "react-icons/fi"
 import { getStorage, ref as storageRef, deleteObject } from "firebase/storage"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
@@ -35,6 +35,7 @@ interface ArticleData {
   }>
   secondaryNotes?: Array<{ id: string, content: string }>
   status?: string
+  scheduleDate?: string
 }
 
 export default function Article() {
@@ -104,16 +105,13 @@ export default function Article() {
             ...snapshot.val()
           };
 
-          // Verifica se l'articolo è in stato di revisione e l'utente non è admin
-          if (articleData.status === 'revision' && !isAdmin) {
-            router.push('/');
-            return;
-          }
-
           setArticle(articleData);
+        } else {
+          setArticle(null);
         }
       } catch (error) {
         console.error("Errore nel recupero dell'articolo:", error);
+        setArticle(null);
       } finally {
         setLoading(false);
       }
@@ -122,7 +120,7 @@ export default function Article() {
     if (params.id) {
       fetchArticle();
     }
-  }, [params.id, isAdmin, router]);
+  }, [params.id]);
 
   // Verifica se l'utente ha già messo like quando carica l'articolo
   useEffect(() => {
@@ -365,6 +363,18 @@ export default function Article() {
     }
   }
 
+  const getTimeUntilScheduled = (scheduleDate: string) => {
+    const now = new Date();
+    const scheduledTime = new Date(scheduleDate);
+    const diffMs = scheduledTime.getTime() - now.getTime();
+
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+
+    return `${diffDays} giorni, ${diffHours} ore, ${diffMinutes} minuti`;
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-zinc-900 to-zinc-800 flex items-center justify-center">
@@ -403,67 +413,281 @@ export default function Article() {
     )
   }
 
-  // Verifica se l'articolo è privato e l'utente non è autenticato
-  if (article?.isPrivate && !user) {
-    return (
-      <main className="min-h-screen bg-gradient-to-br from-zinc-900 to-zinc-800">
-        <div className="container mx-auto px-4 py-8 sm:py-12">
-          {/* Header con navigazione */}
-          <div className="mb-8">
-            <Link 
-              href="/articles"
-              className="inline-flex items-center text-sm text-zinc-200 hover:text-amber-500 transition-colors duration-300 mb-4"
-            >
-              <FiArrowLeft className="mr-2 h-4 w-4" />
-              Torna agli articoli
-            </Link>
-          </div>
-
-          {/* Contenuto blurrato */}
-          <div className="relative">
-            {/* Mostra l'articolo blurrato */}
-            <div className="blur-md opacity-50">
-              <div className="relative w-full aspect-video max-w-4xl mx-auto mb-8 rounded-2xl overflow-hidden bg-zinc-700" />
-              <div className="max-w-4xl mx-auto space-y-4">
-                <div className="h-12 bg-zinc-700 rounded-lg" />
-                <div className="h-4 bg-zinc-700 rounded-lg w-3/4" />
-                <div className="h-4 bg-zinc-700 rounded-lg" />
-                <div className="h-4 bg-zinc-700 rounded-lg w-2/3" />
-              </div>
-            </div>
-
-            {/* Overlay di accesso */}
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="text-center p-8 bg-zinc-800/30 rounded-2xl backdrop-blur-lg border border-zinc-700">
-                <FiLock className="mx-auto h-12 w-12 text-amber-500 mb-4" />
-                <h2 className="text-2xl font-bold text-zinc-50 mb-4">
-                  Contenuto riservato
-                </h2>
-                <p className="text-zinc-200 mb-6">
-                  Effettua l&apos;accesso per leggere l&apos;articolo
-                </p>
-                <Link
-                  href="/access"
-                  className="inline-flex items-center px-6 py-3 bg-amber-500 text-white rounded-full hover:bg-amber-600 transition-colors duration-300"
-                >
-                  Accedi
-                </Link>
-              </div>
-            </div>
-          </div>
-        </div>
-      </main>
-    )
-  }
-
   if (!article) {
     return (
+      <motion.div 
+        initial={{ opacity: 0 }} 
+        animate={{ opacity: 1 }} 
+        className="min-h-screen bg-gradient-to-br from-zinc-900 to-zinc-800 flex items-center justify-center p-4"
+      >
+        <motion.div
+          initial={{ scale: 0.9, y: 10 }}
+          animate={{ scale: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="max-w-md w-full bg-zinc-800/50 backdrop-blur-xl border border-zinc-700/50 rounded-2xl p-8 shadow-2xl"
+        >
+          <div className="flex flex-col items-center text-center">
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 0.2, duration: 0.5 }}
+              className="w-20 h-20 bg-zinc-700/70 rounded-full flex items-center justify-center mb-6"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M12 12h.01M12 14h.01M12 20h.01M12 18h.01M12 12a4 4 0 110-8 4 4 0 010 8z" />
+              </svg>
+            </motion.div>
+            
+            <motion.h2
+              initial={{ y: 10, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.3, duration: 0.5 }}
+              className="text-2xl font-bold text-white mb-3"
+            >
+              Articolo non trovato
+            </motion.h2>
+            
+            <motion.p
+              initial={{ y: 10, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.4, duration: 0.5 }}
+              className="text-zinc-400 mb-8"
+            >
+              Questo articolo non è disponibile o potrebbe essere stato rimosso.
+            </motion.p>
+            
+            <motion.div
+              initial={{ y: 10, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.5, duration: 0.5 }}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <button
+                onClick={() => router.push('/articles')}
+                className="w-full px-6 py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white rounded-xl font-medium shadow-lg hover:shadow-amber-500/20 transition-all duration-300 flex items-center justify-center cursor-pointer"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16l-4-4m0 0l4-4m-4 4h18" />
+                </svg>
+                Esplora altri articoli
+              </button>
+            </motion.div>
+          </div>
+        </motion.div>
+      </motion.div>
+    );
+  }
+
+  if (article.status !== 'accepted' && (!isAdmin || (isAdmin && article.status !== 'revision'))) {
+    const getStatusIcon = () => {
+      switch (article.status) {
+        case 'revision':
+          return (
+            <motion.div
+              animate={{ rotate: [0, 360] }}
+              transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+              className="w-10 h-10 text-purple-400"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </motion.div>
+          );
+        case 'scheduled':
+          return (
+            <motion.div
+              animate={{ scale: [1, 1.1, 1] }}
+              transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+              className="w-10 h-10 text-blue-400"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </motion.div>
+          );
+        case 'suspended':
+          return (
+            <motion.div
+              animate={{ opacity: [1, 0.6, 1] }}
+              transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+              className="w-10 h-10 text-amber-400"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </motion.div>
+          );
+        default:
+          return (
+            <motion.div className="w-10 h-10 text-zinc-400">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </motion.div>
+          );
+      }
+    };
+
+    const getStatusTitle = () => {
+      switch (article.status) {
+        case 'revision':
+          return "Articolo in fase di revisione";
+        case 'scheduled':
+          return "Articolo programmato";
+        case 'suspended':
+          return "Articolo temporaneamente sospeso";
+        default:
+          return "Articolo non disponibile";
+      }
+    };
+
+    const getStatusDescription = () => {
+      switch (article.status) {
+        case 'revision':
+          return "Questo articolo è attualmente sotto revisione editoriale e sarà pubblicato a breve.";
+        case 'scheduled':
+          return `Questo articolo è programmato per essere pubblicato tra: ${getTimeUntilScheduled(article.scheduleDate || '')}`;
+        case 'suspended':
+          return "Questo articolo è stato temporaneamente sospeso dalla redazione.";
+        default:
+          return "Questo articolo non è attualmente disponibile per la visualizzazione.";
+      }
+    };
+
+    const getBgGradient = () => {
+      switch (article.status) {
+        case 'revision':
+          return "from-purple-900/20 to-indigo-900/20";
+        case 'scheduled':
+          return "from-blue-900/20 to-cyan-900/20";
+        case 'suspended':
+          return "from-amber-900/20 to-orange-900/20";
+        default:
+          return "from-zinc-900/20 to-zinc-800/20";
+      }
+    };
+
+    const getBorderColor = () => {
+      switch (article.status) {
+        case 'revision':
+          return "border-purple-700/30";
+        case 'scheduled':
+          return "border-blue-700/30";
+        case 'suspended':
+          return "border-amber-700/30";
+        default:
+          return "border-zinc-700/30";
+      }
+    };
+
+    return (
+      <motion.div 
+        initial={{ opacity: 0 }} 
+        animate={{ opacity: 1 }} 
+        className="min-h-screen bg-gradient-to-br from-zinc-900 to-zinc-800 flex items-center justify-center p-4"
+      >
+        <motion.div
+          initial={{ scale: 0.9, y: 10 }}
+          animate={{ scale: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className={`max-w-md w-full bg-gradient-to-b ${getBgGradient()} backdrop-blur-xl border ${getBorderColor()} rounded-2xl p-8 shadow-2xl`}
+        >
+          <div className="flex flex-col items-center text-center">
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 0.2, duration: 0.5 }}
+              className="w-20 h-20 bg-zinc-700/50 rounded-full flex items-center justify-center mb-6"
+            >
+              {getStatusIcon()}
+            </motion.div>
+            
+            <motion.h2
+              initial={{ y: 10, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.3, duration: 0.5 }}
+              className="text-2xl font-bold text-white mb-3"
+            >
+              {getStatusTitle()}
+            </motion.h2>
+            
+            <motion.p
+              initial={{ y: 10, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.4, duration: 0.5 }}
+              className="text-zinc-300 mb-8"
+            >
+              {getStatusDescription()}
+            </motion.p>
+            
+            <motion.div
+              initial={{ y: 10, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.5, duration: 0.5 }}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.98 }}
+              className="w-full"
+            >
+              <button
+                onClick={() => router.push('/articles')}
+                className="w-full px-6 py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white rounded-xl font-medium shadow-lg hover:shadow-amber-500/20 transition-all duration-300 flex items-center justify-center cursor-pointer"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16l-4-4m0 0l4-4m-4 4h18" />
+                </svg>
+                Esplora altri articoli
+              </button>
+            </motion.div>
+            
+            {article.status === 'scheduled' && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.7, duration: 0.5 }}
+                className="mt-6 w-full"
+              >
+                <div className="w-full bg-zinc-700/30 rounded-full h-2 overflow-hidden">
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ 
+                      width: `${Math.min(100, getScheduleProgress(article.scheduleDate || ''))}%` 
+                    }}
+                    transition={{ delay: 0.8, duration: 1, ease: "easeOut" }}
+                    className="h-full bg-gradient-to-r from-blue-500 to-cyan-400"
+                  />
+                </div>
+              </motion.div>
+            )}
+          </div>
+        </motion.div>
+      </motion.div>
+    );
+  }
+
+  if (article.status !== 'accepted') {
+    let statusMessage = '';
+    if (article.status === 'revision') {
+      statusMessage = 'Articolo in revisione';
+    } else if (article.status === 'scheduled') {
+      statusMessage = `Articolo programmato. Disponibile tra: ${getTimeUntilScheduled(article.scheduleDate || '')}`;
+    } else if (article.status === 'suspended') {
+      statusMessage = 'Articolo sospeso';
+    }
+
+    return (
       <div className="min-h-screen bg-gradient-to-br from-zinc-900 to-zinc-800 flex items-center justify-center">
-        <div className="text-zinc-200">
-          Articolo non trovato
+        <div className="text-center text-zinc-200">
+          <h2 className="text-2xl font-bold mb-4">{statusMessage}</h2>
+          <button
+            onClick={() => router.push('/articles')}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Vai agli articoli
+          </button>
         </div>
       </div>
-    )
+    );
   }
 
   // Add this function after the renderContentWithNotes function to extract and process YouTube links
@@ -938,6 +1162,9 @@ export default function Article() {
     );
   };
 
+  // Add type assertion to fix type error
+  const articleStatus = article.status as string;
+
   return (
     <motion.main 
       ref={containerRef}
@@ -1067,16 +1294,16 @@ export default function Article() {
             transition={{ duration: 0.5 }}
           >
             <Link 
-              href={isAdmin && article?.status === 'revision' ? "/admin/review-articles" : "/articles"}
+              href={isAdmin && articleStatus === 'revision' ? "/admin/review-articles" : "/articles"}
               className="inline-flex items-center text-sm text-zinc-400 hover:text-amber-400 transition-colors duration-300 mb-4"
             >
               <FiArrowLeft className="mr-2 h-4 w-4" />
-              {isAdmin && article?.status === 'revision' ? "Torna a revisione articoli" : "Torna agli articoli"}
+              {isAdmin && articleStatus === 'revision' ? "Torna a revisione articoli" : "Torna agli articoli"}
             </Link>
           </motion.div>
           
           {/* Banner di revisione */}
-          {article?.status === 'revision' && (isSuperior || isAdmin) && (
+          {articleStatus === 'revision' && (isSuperior || isAdmin) && (
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1492,4 +1719,16 @@ export default function Article() {
       {showShareModal && <ShareModal />}
     </motion.main>
   )
+} 
+
+// Add this function to calculate schedule progress percentage
+function getScheduleProgress(scheduleDate: string): number {
+  const now = new Date();
+  const scheduledTime = new Date(scheduleDate);
+  const creationTime = new Date(now.getTime() - (1000 * 60 * 60 * 24 * 7)); // Assume article was created 7 days ago
+  
+  const totalDuration = scheduledTime.getTime() - creationTime.getTime();
+  const elapsed = now.getTime() - creationTime.getTime();
+  
+  return Math.max(0, Math.min(100, (elapsed / totalDuration) * 100));
 } 

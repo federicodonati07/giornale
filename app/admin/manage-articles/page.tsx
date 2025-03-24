@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
-import { FiArrowLeft, FiTrash2, FiEye, FiHeart, FiShare2, FiAlertCircle, FiX } from "react-icons/fi"
+import { FiArrowLeft, FiTrash2, FiEye, FiHeart, FiShare2, FiAlertCircle, FiX, FiTrendingUp } from "react-icons/fi"
 import { getStorage, ref as storageRef, deleteObject, uploadBytes, getDownloadURL } from "firebase/storage"
 import { ref, get, remove, update } from "firebase/database"
 import { onAuthStateChanged } from "firebase/auth"
@@ -478,6 +478,33 @@ export default function ManageArticlesPage() {
   // Function to increase displayed articles by 5
   const loadMoreArticles = () => {
     setDisplayedArticles(prev => prev + 5);
+  };
+
+  // Aggiungi questa funzione per calcolare il punteggio delle prestazioni
+  const calculatePerformanceScore = (article: ArticleData) => {
+    // Calcola i valori medi per visualizzazioni, upvote e condivisioni
+    const avgViews = articles.reduce((sum, art) => sum + (art.view || 0), 0) / articles.length || 1;
+    const avgUpvotes = articles.reduce((sum, art) => sum + (art.upvote || 0), 0) / articles.length || 1;
+    const avgShares = articles.reduce((sum, art) => sum + (art.shared || 0), 0) / articles.length || 1;
+    
+    // Calcola i punteggi normalizzati rispetto alla media (con pesi diversi)
+    const viewScore = ((article.view || 0) / avgViews) * 40; // 40% del peso
+    const upvoteScore = ((article.upvote || 0) / avgUpvotes) * 40; // 40% del peso
+    const shareScore = ((article.shared || 0) / avgShares) * 20; // 20% del peso
+    
+    // Calcola il punteggio totale e limita a 200%
+    const totalScore = Math.min(Math.round(viewScore + upvoteScore + shareScore), 200);
+    
+    return totalScore;
+  };
+  
+  // Aggiungi questa funzione per ottenere la classe di colore in base alla prestazione
+  const getPerformanceColorClass = (score: number) => {
+    if (score >= 150) return "bg-green-500 dark:bg-green-600";
+    if (score >= 100) return "bg-blue-500 dark:bg-blue-600";
+    if (score >= 70) return "bg-amber-500 dark:bg-amber-600";
+    if (score >= 40) return "bg-orange-500 dark:bg-orange-600";
+    return "bg-red-500 dark:bg-red-600";
   };
 
   if (loading) {
@@ -1081,7 +1108,7 @@ export default function ManageArticlesPage() {
                     Data {sortBy === 'creazione' && (sortDirection === 'asc' ? '↑' : '↓')}
                   </th>
                   <th className="p-3 text-left text-sm font-medium text-zinc-600 dark:text-zinc-400">Tag</th>
-                  <th className="p-3 text-center text-sm font-medium text-zinc-600 dark:text-zinc-400">Statistiche</th>
+                  <th className="p-3 text-center text-sm font-medium text-zinc-600 dark:text-zinc-400">Prestazioni</th>
                   <th className="p-3 text-center text-sm font-medium text-zinc-600 dark:text-zinc-400">Azioni</th>
                 </tr>
               </thead>
@@ -1164,20 +1191,96 @@ export default function ManageArticlesPage() {
                       </div>
                     </td>
                     
-                    {/* Statistiche */}
+                    {/* Statistiche riprogettate per migliore usabilità e semantica dei colori */}
                     <td className="p-3">
-                      <div className="flex justify-center gap-4">
-                        <div className="flex items-center text-zinc-600 dark:text-zinc-400" title="Visualizzazioni">
-                          <FiEye className="mr-1 h-4 w-4" />
-                          <span>{article.view || 0}</span>
+                      <div className="flex flex-col space-y-3 w-full max-w-[140px] mx-auto bg-white/10 dark:bg-zinc-800/30 p-2.5 rounded-xl shadow-sm border border-white/20 dark:border-zinc-700/40">
+                        {/* Indicatore di performance principale */}
+                        <div className="flex items-center justify-between">
+                          <FiTrendingUp
+                            className={`h-4 w-4 ${
+                              calculatePerformanceScore(article) >= 100 ? "text-green-500 dark:text-green-600" :
+                              calculatePerformanceScore(article) >= 70 ? "text-yellow-500 dark:text-yellow-600" :
+                              "text-red-500 dark:text-red-600"
+                            }`}
+                          />
+                          <div 
+                            className={`px-2 py-0.5 rounded-full text-xs font-bold tabular-nums text-white ${
+                              calculatePerformanceScore(article) >= 100 ? "bg-green-500 dark:bg-green-600" :
+                              calculatePerformanceScore(article) >= 70 ? "bg-yellow-500 dark:bg-yellow-600" :
+                              "bg-red-500 dark:bg-red-600"
+                            }`}
+                          >
+                            {calculatePerformanceScore(article)}%
+                          </div>
                         </div>
-                        <div className="flex items-center text-zinc-600 dark:text-zinc-400" title="Mi piace">
-                          <FiHeart className="mr-1 h-4 w-4" />
-                          <span>{article.upvote || 0}</span>
+                        
+                        {/* Barra di performance con semantica dei colori */}
+                        <div className="h-2 w-full bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full rounded-full transition-all duration-500 ${
+                              calculatePerformanceScore(article) >= 100 ? "bg-green-500 dark:bg-green-600" :
+                              calculatePerformanceScore(article) >= 70 ? "bg-yellow-500 dark:bg-yellow-600" :
+                              "bg-red-500 dark:bg-red-600"
+                            }`}
+                            style={{ width: `${Math.min(calculatePerformanceScore(article), 100)}%` }}
+                          ></div>
                         </div>
-                        <div className="flex items-center text-zinc-600 dark:text-zinc-400" title="Condivisioni">
-                          <FiShare2 className="mr-1 h-4 w-4" />
-                          <span>{article.shared || 0}</span>
+                        
+                        {/* Metriche singole in layout più usabile */}
+                        <div className="flex items-center justify-between gap-2 text-xs pt-1 border-t border-zinc-200 dark:border-zinc-700/50">
+                          {/* Like */}
+                          <div className="flex flex-col items-center gap-1">
+                            <div className="flex items-center gap-1">
+                              <FiHeart className="h-3.5 w-3.5 text-rose-500 dark:text-rose-400" />
+                              <span className="font-medium tabular-nums text-zinc-900 dark:text-zinc-100">{article.upvote || 0}</span>
+                            </div>
+                            <div className="w-8 h-1.5 bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
+                              <div 
+                                className="h-full bg-rose-500 rounded-full"
+                                style={{ 
+                                  width: articles.length > 0 
+                                    ? `${Math.min(((article.upvote || 0) / articles.reduce((max, a) => Math.max(max, a.upvote || 0), 1)) * 100, 100)}%`
+                                    : '0%' 
+                                }}
+                              ></div>
+                            </div>
+                          </div>
+                          
+                          {/* Visualizzazioni */}
+                          <div className="flex flex-col items-center gap-1">
+                            <div className="flex items-center gap-1">
+                              <FiEye className="h-3.5 w-3.5 text-blue-500 dark:text-blue-400" />
+                              <span className="font-medium tabular-nums text-zinc-900 dark:text-zinc-100">{article.view || 0}</span>
+                            </div>
+                            <div className="w-8 h-1.5 bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
+                              <div 
+                                className="h-full bg-blue-500 rounded-full"
+                                style={{ 
+                                  width: articles.length > 0 
+                                    ? `${Math.min(((article.view || 0) / articles.reduce((max, a) => Math.max(max, a.view || 0), 1)) * 100, 100)}%` 
+                                    : '0%' 
+                                }}
+                              ></div>
+                            </div>
+                          </div>
+                          
+                          {/* Condivisioni */}
+                          <div className="flex flex-col items-center gap-1">
+                            <div className="flex items-center gap-1">
+                              <FiShare2 className="h-3.5 w-3.5 text-purple-500 dark:text-purple-400" />
+                              <span className="font-medium tabular-nums text-zinc-900 dark:text-zinc-100">{article.shared || 0}</span>
+                            </div>
+                            <div className="w-8 h-1.5 bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
+                              <div 
+                                className="h-full bg-purple-500 rounded-full"
+                                style={{ 
+                                  width: articles.length > 0 
+                                    ? `${Math.min(((article.shared || 0) / articles.reduce((max, a) => Math.max(max, a.shared || 0), 1)) * 100, 100)}%` 
+                                    : '0%' 
+                                }}
+                              ></div>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </td>
