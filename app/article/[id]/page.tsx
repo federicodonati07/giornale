@@ -69,6 +69,9 @@ export default function Article() {
   const [isSuperior, setIsSuperior] = useState(false)
   const [confirmAction, setConfirmAction] = useState<{ action: 'reject' | 'accept' } | null>(null)
 
+  // Definisci useRef al livello più alto del componente
+  const hasRunViewCount = useRef(false);
+
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((currentUser) => {
       setUser(currentUser)
@@ -137,13 +140,71 @@ export default function Article() {
   // Inizializza l'URL dell'articolo quando il componente viene montato
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      setArticleUrl(window.location.href)
+      // Prepariamo l'URL con il parametro shared
+      const baseUrl = window.location.origin + window.location.pathname;
+      setArticleUrl(`${baseUrl}?shared=true`);
     }
-  }, [])
+  }, []);
+
+  // Modifica l'useEffect per il conteggio delle visualizzazioni da condivisione
+  useEffect(() => {
+    const countSharedView = async () => {
+      // Verifica se possiamo incrementare la visualizzazione
+      if (
+        !hasRunViewCount.current && 
+        typeof window !== 'undefined' && 
+        window.location.search.includes('shared=true') && 
+        article?.uuid && 
+        !sessionStorage.getItem(`shared_view_counted_${article.uuid}`)
+      ) {
+        // Impostiamo subito il flag per evitare esecuzioni multiple
+        hasRunViewCount.current = true;
+        
+        try {
+          // Marchiamo immediatamente come conteggiata
+          sessionStorage.setItem(`shared_view_counted_${article.uuid}`, 'true');
+          
+          // Incrementa il contatore sul database (esattamente +1)
+          const articleRef = ref(db, `articoli/${article.uuid}`);
+          await update(articleRef, {
+            view: increment(1)
+          });
+          
+          // Aggiorniamo lo stato locale (esattamente +1)
+          setArticle(prev => {
+            if (!prev) return null;
+            return {
+              ...prev,
+              view: (prev.view || 0) + 1
+            };
+          });
+          
+          // Rimuovi il parametro dall'URL senza ricaricare la pagina
+          const newUrl = window.location.pathname;
+          window.history.replaceState({}, document.title, newUrl);
+          
+          console.log('Visualizzazione da condivisione registrata: +1');
+        } catch (error) {
+          console.error("Errore nell'aggiornamento delle visualizzazioni:", error);
+        }
+      }
+    };
+    
+    // Esegui solo quando l'articolo è caricato
+    if (article) {
+      countSharedView();
+    }
+    
+    // Funzione di pulizia che viene eseguita quando il componente si smonta
+    return () => {
+      hasRunViewCount.current = false;
+    };
+  }, [article]);
 
   const handleLike = async () => {
     if (!user) {
-      showMessage("Devi effettuare l'accesso per mettere un like");
+      // Reindirizzamento alla pagina di accesso invece di mostrare solo un messaggio
+      router.push('/access');
       return;
     }
     
@@ -186,39 +247,39 @@ export default function Article() {
   const handleShare = async () => {
     try {
       // Copia il link negli appunti (funziona per tutti)
-      await navigator.clipboard.writeText(articleUrl)
+      await navigator.clipboard.writeText(articleUrl);
       
       // Per gli admin, mostra il modal avanzato
       if (isAdmin) {
-        setShowShareModal(true)
+        setShowShareModal(true);
       } else {
         // Per utenti normali o non autenticati, mostra solo messaggio di link copiato
-        showMessage('Link copiato negli appunti!')
+        showMessage('Link copiato negli appunti!');
       }
       
       // Aggiorna le statistiche di condivisione solo se l'utente è autenticato
       if (user) {
         try {
-          const articleRef = ref(db, `articoli/${params.id}`)
+          const articleRef = ref(db, `articoli/${params.id}`);
           await update(articleRef, {
             shared: increment(1)
-          })
+          });
           
-          setArticle(prev => prev ? {...prev, shared: (prev.shared || 0) + 1} : null)
+          setArticle(prev => prev ? {...prev, shared: (prev.shared || 0) + 1} : null);
         } catch (dbError) {
-          console.error("Errore nell'aggiornamento delle statistiche di condivisione:", dbError)
+          console.error("Errore nell'aggiornamento delle statistiche di condivisione:", dbError);
           // Non mostriamo errori all'utente, l'operazione principale (copia link) è già riuscita
         }
       } else {
         // Per gli utenti non autenticati, aggiorniamo solo l'interfaccia utente localmente
         // senza scrivere nel database
-        setArticle(prev => prev ? {...prev, shared: (prev.shared || 0) + 1} : null)
+        setArticle(prev => prev ? {...prev, shared: (prev.shared || 0) + 1} : null);
       }
     } catch (error) {
-      console.error("Errore nella condivisione:", error)
-      showMessage("Errore nella condivisione")
+      console.error("Errore nella condivisione:", error);
+      showMessage("Errore nella condivisione");
     }
-  }
+  };
 
   // Funzione per accettare un articolo
   const acceptArticle = async () => {
@@ -634,8 +695,16 @@ export default function Article() {
         
         // Ottieni un QR code come immagine da un API gratuito
         const getQRCodeImage = async (url: string) => {
+          // Assicuriamoci che l'URL contenga il parametro shared
+          let qrUrl = url;
+          if (!qrUrl.includes('shared=true')) {
+            qrUrl = qrUrl.includes('?') 
+              ? `${qrUrl}&shared=true` 
+              : `${qrUrl}?shared=true`;
+          }
+          
           // Encodiamo l'URL per l'API
-          const encodedUrl = encodeURIComponent(url);
+          const encodedUrl = encodeURIComponent(qrUrl);
           
           // Utilizziamo QR Server che permette di personalizzare il colore
           const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?data=${encodedUrl}&size=250x250&color=F59E0B&bgcolor=FFFFFF`;
