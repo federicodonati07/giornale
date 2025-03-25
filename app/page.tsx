@@ -21,6 +21,10 @@ export default function Home() {
   const [displayCount, setDisplayCount] = useState(0);
   const animationRef = useRef<number | null>(null);
 
+  // Add a new state for total views
+  const [displayTotalViews, setDisplayTotalViews] = useState(0);
+  const totalViewsAnimationRef = useRef<number | null>(null);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
@@ -267,6 +271,62 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [user]);
 
+  // Add this function to animate the total views counter
+  const animateTotalViews = (start: number, end: number, duration: number) => {
+    const startTime = performance.now();
+    
+    const updateTotalViews = (currentTime: number) => {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      
+      // Easing function for smooth animation
+      const easeOutQuart = 1 - Math.pow(1 - progress, 4);
+      const currentCount = Math.floor(start + (end - start) * easeOutQuart);
+      
+      setDisplayTotalViews(currentCount);
+      
+      if (progress < 1) {
+        totalViewsAnimationRef.current = requestAnimationFrame(updateTotalViews);
+      }
+    };
+    
+    totalViewsAnimationRef.current = requestAnimationFrame(updateTotalViews);
+  };
+
+  // Add a useEffect to fetch total views
+  useEffect(() => {
+    const fetchTotalViews = async () => {
+      try {
+        const articlesRef = ref(db, 'articoli');
+        const snapshot = await get(articlesRef);
+        
+        if (snapshot.exists()) {
+          let totalViews = 0;
+          
+          snapshot.forEach((childSnapshot) => {
+            const article = childSnapshot.val();
+            totalViews += article.view || 0;
+          });
+          
+          animateTotalViews(0, totalViews, 2000);
+        } else {
+          animateTotalViews(0, 0, 2000);
+        }
+      } catch (error) {
+        console.error("Errore nel recupero delle visualizzazioni totali:", error);
+        animateTotalViews(0, 0, 2000);
+      }
+    };
+    
+    fetchTotalViews();
+    
+    return () => {
+      if (totalViewsAnimationRef.current) {
+        cancelAnimationFrame(totalViewsAnimationRef.current);
+      }
+    };
+  }, []);
+
   return (
     <main className="min-h-screen bg-gradient-to-br from-zinc-100 to-zinc-200/90 dark:from-zinc-900 dark:to-zinc-800 overflow-x-hidden">
       {/* Stili per l'animazione del menu e animazioni personalizzate */}
@@ -441,12 +501,12 @@ export default function Home() {
             </h1>
           </motion.div>
 
-          {/* User Counter con animazione */}
+          {/* User Counter with animation */}
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 1, delay: 0.5 }}
-            className="flex flex-col items-center space-y-1"
+            className="flex flex-col items-center space-y-3"
           >
             <div className="flex items-baseline gap-2 text-zinc-500 dark:text-zinc-400">
               <span className="font-medium text-base text-amber-500">
@@ -454,6 +514,16 @@ export default function Home() {
               </span>
               <span className="text-sm">
                 utenti registrati
+              </span>
+            </div>
+            
+            {/* Total Views Counter */}
+            <div className="flex items-baseline gap-2 text-zinc-500 dark:text-zinc-400">
+              <span className="font-medium text-base text-amber-500">
+                {displayTotalViews.toLocaleString()}
+              </span>
+              <span className="text-sm">
+                visualizzazioni totali
               </span>
             </div>
           </motion.div>
