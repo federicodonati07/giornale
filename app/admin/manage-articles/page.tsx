@@ -12,7 +12,6 @@ import { FirebaseError } from "firebase/app"
 import { auth, db, app } from "../../firebase"
 import { motion, useScroll, useTransform } from "framer-motion"
 import { v4 as uuidv4 } from 'uuid'
-import { Button } from "@/app/components/ui/button"
 
 interface ArticleData {
   uuid: string
@@ -25,10 +24,10 @@ interface ArticleData {
   upvote: number
   shared: number
   view: number
+  status?: string
   partecipanti?: string
   isPrivate: boolean
   additionalLinks?: { label: string; url: string }[]
-  status?: string
   scheduleDate?: string
   secondaryNotes?: { id: string; content: string }[]
 }
@@ -53,8 +52,8 @@ export default function ManageArticlesPage() {
     partecipanti: '',
     isPrivate: false,
     immagine: '',
-    additionalLinks: [] as Array<{ url: string, label: string }>,
-    secondaryNotes: [] as Array<{ id: string, content: string }>,
+    additionalLinks: [] as { label: string; url: string }[],
+    secondaryNotes: [] as { id: string, content: string }[],
     newNoteContent: '',
     newLinkUrl: '',
     newLinkLabel: ''
@@ -69,6 +68,10 @@ export default function ManageArticlesPage() {
   const authorDropdownRef = useRef<HTMLDivElement>(null)
   // Aggiungi questo state per gestire la conferma di revisione
   const [revisionConfirm, setRevisionConfirm] = useState<string | null>(null)
+  // Aggiungi questi stati per la gestione della selezione multipla e filtri
+  const [selectedArticles, setSelectedArticles] = useState<string[]>([]);
+  const [showSuspended, setShowSuspended] = useState<boolean>(false);
+  const [bulkActionConfirm, setBulkActionConfirm] = useState<{type: 'delete' | 'suspend' | 'activate' | 'revision', count: number} | null>(null);
 
   // Add scroll tracking for parallax effects
   const { scrollY } = useScroll()
@@ -91,7 +94,28 @@ export default function ManageArticlesPage() {
   const searchBarY = useTransform(scrollY, [0, 200], [0, -5])
   const tableOpacity = useTransform(scrollY, [0, 100], [0.95, 1])
   const tableY = useTransform(scrollY, [0, 100], [15, 0])
-
+  
+  // Aggiungi questo useEffect per creare lo stile delle scrollbar nascoste
+  useEffect(() => {
+    // Crea un elemento di stile per nascondere le scrollbar
+    const styleElement = document.createElement('style');
+    styleElement.textContent = `
+      .hidden-scrollbar {
+        scrollbar-width: none; /* Firefox */
+        -ms-overflow-style: none; /* IE and Edge */
+      }
+      .hidden-scrollbar::-webkit-scrollbar {
+        display: none; /* Chrome, Safari, Opera */
+      }
+    `;
+    
+    document.head.appendChild(styleElement);
+    
+    // Cleanup quando il componente viene smontato
+    return () => {
+      document.head.removeChild(styleElement);
+    };
+  }, []);
 
   // Aggiungi le categorie disponibili
   const availableCategories = [
@@ -242,17 +266,24 @@ export default function ManageArticlesPage() {
     }, 5000)
   }
 
-  // Funzione per formattare la data
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    return date.toLocaleDateString('it-IT', { 
-      day: '2-digit', 
-      month: '2-digit', 
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
-  }
+  // Format the date string to a more readable format
+  const formatDate = (dateString: string | null | undefined): string => {
+    if (!dateString) return '';
+    
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('it-IT', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return dateString; // Return the original string if parsing fails
+    }
+  };
 
   // Funzione per ordinare gli articoli
   const sortArticles = (a: ArticleData, b: ArticleData) => {
@@ -292,8 +323,10 @@ export default function ManageArticlesPage() {
      article.autore.toLowerCase().includes(searchTerm.toLowerCase()) ||
      article.tag.toLowerCase().includes(searchTerm.toLowerCase()) ||
      article.contenuto.toLowerCase().includes(searchTerm.toLowerCase())) &&
-    // Nascondi gli articoli con status 'revision'
-    article.status !== 'revision'
+    // Filtra in base allo stato
+    (article.status !== 'revision') &&
+    // Mostra articoli sospesi solo se il filtro è attivo
+    (showSuspended ? article.status === 'suspended' : true)
   ).sort(sortArticles)
 
   // Funzione per ottenere un estratto del contenuto
@@ -492,7 +525,13 @@ export default function ManageArticlesPage() {
 
   // Function to increase displayed articles by 5
   const loadMoreArticles = () => {
-    setDisplayedArticles(prev => prev + 5);
+    if (displayedArticles < filteredArticles.length) {
+      // Se ci sono più articoli da mostrare, li mostriamo tutti
+      setDisplayedArticles(filteredArticles.length);
+    } else {
+      // Se stiamo già mostrando tutti gli articoli, torniamo a mostrarne solo 5
+      setDisplayedArticles(5);
+    }
   };
 
   // Aggiungi questa funzione per calcolare il punteggio delle prestazioni
@@ -617,6 +656,159 @@ export default function ManageArticlesPage() {
     } catch (error) {
       console.error("Errore durante l'invio in revisione:", error);
       showNotification("error", "Errore durante l'invio in revisione dell'articolo");
+    }
+  };
+
+  // Aggiungi queste funzioni per gestire la selezione
+  const toggleSelectArticle = (uuid: string) => {
+    setSelectedArticles(prev => 
+      prev.includes(uuid) 
+        ? prev.filter(id => id !== uuid)
+        : [...prev, uuid]
+    );
+  };
+
+  const selectAllDisplayedArticles = () => {
+    if (selectedArticles.length === filteredArticles.slice(0, displayedArticles).length) {
+      // Se tutti sono già selezionati, deseleziona tutti
+      setSelectedArticles([]);
+    } else {
+      // Altrimenti seleziona tutti
+      setSelectedArticles(filteredArticles.slice(0, displayedArticles).map(a => a.uuid));
+    }
+  };
+
+  // Aggiungi queste funzioni per determinare lo stato degli articoli selezionati
+  const getSelectedArticlesStatus = () => {
+    const selectedArticlesData = articles.filter(article => selectedArticles.includes(article.uuid));
+    const suspendedCount = selectedArticlesData.filter(article => article.status === 'suspended').length;
+    const activeCount = selectedArticlesData.length - suspendedCount;
+
+    // Tutti sospesi
+    if (suspendedCount === selectedArticlesData.length) {
+      return 'all-suspended';
+    }
+    // Tutti attivi
+    if (activeCount === selectedArticlesData.length) {
+      return 'all-active';
+    }
+    // Misti
+    return 'mixed';
+  };
+
+  // Aggiorna la funzione confirmBulkAction per gestire l'attivazione/sospensione in modo intelligente
+  const confirmBulkAction = (type: 'delete' | 'suspend' | 'activate' | 'revision') => {
+    // Se il tipo è suspend o activate, adatta l'azione in base allo stato corrente
+    if (type === 'suspend' || type === 'activate') {
+      const status = getSelectedArticlesStatus();
+      
+      // Se tutti gli articoli sono già sospesi e si vuole sospendere, non fare nulla
+      if (status === 'all-suspended' && type === 'suspend') {
+        showNotification("info", "Tutti gli articoli selezionati sono già sospesi");
+        return;
+      }
+      
+      // Se tutti gli articoli sono già attivi e si vuole attivare, non fare nulla
+      if (status === 'all-active' && type === 'activate') {
+        showNotification("info", "Tutti gli articoli selezionati sono già attivi");
+        return;
+      }
+      
+      // Per lo stato misto, usa il tipo specificato (suspend o activate)
+    }
+    
+    setBulkActionConfirm({ 
+      type, 
+      count: selectedArticles.length 
+    });
+  };
+
+  // Modifica la logica di executeBulkAction per gestire selettivamente gli articoli
+  const executeBulkAction = async () => {
+    if (!bulkActionConfirm) return;
+    
+    try {
+      setLoading(true);
+      const status = getSelectedArticlesStatus();
+      const articlesToProcess = [...selectedArticles];
+      
+      // Se l'azione è suspend e lo stato è misto, processa solo gli articoli attivi
+      if (bulkActionConfirm.type === 'suspend' && status === 'mixed') {
+        const activeArticles = articles
+          .filter(a => selectedArticles.includes(a.uuid) && a.status !== 'suspended')
+          .map(a => a.uuid);
+        articlesToProcess.length = 0;
+        articlesToProcess.push(...activeArticles);
+      }
+      
+      // Se l'azione è activate e lo stato è misto, processa solo gli articoli sospesi
+      if (bulkActionConfirm.type === 'activate' && status === 'mixed') {
+        const suspendedArticles = articles
+          .filter(a => selectedArticles.includes(a.uuid) && a.status === 'suspended')
+          .map(a => a.uuid);
+        articlesToProcess.length = 0;
+        articlesToProcess.push(...suspendedArticles);
+      }
+      
+      for (const uuid of articlesToProcess) {
+        const articleRef = ref(db, `articoli/${uuid}`);
+        
+        switch (bulkActionConfirm.type) {
+          case 'delete':
+            // Trova l'articolo per l'immagine
+            const articleToDelete = articles.find(a => a.uuid === uuid);
+            if (articleToDelete?.immagine && articleToDelete.immagine.includes('firebasestorage.googleapis.com')) {
+              try {
+                const storage = getStorage(app);
+                const imageUrl = new URL(articleToDelete.immagine);
+                const imagePath = decodeURIComponent(imageUrl.pathname.split('/o/')[1].split('?')[0]);
+                const imageRef = storageRef(storage, imagePath);
+                await deleteObject(imageRef);
+              } catch (imageError) {
+                console.error("Errore durante l'eliminazione dell'immagine:", imageError);
+              }
+            }
+            await remove(articleRef);
+            break;
+            
+          case 'suspend':
+            await update(articleRef, { status: 'suspended' });
+            break;
+            
+          case 'activate':
+            await update(articleRef, { status: 'accepted' });
+            break;
+            
+          case 'revision':
+            await update(articleRef, { status: 'revision' });
+            break;
+        }
+      }
+      
+      // Aggiorna la lista degli articoli
+      await fetchArticles();
+      
+      // Mostra notifica di successo con il conteggio corretto
+      const actionMessages = {
+        delete: "eliminati",
+        suspend: "sospesi",
+        activate: "riattivati",
+        revision: "inviati in revisione"
+      };
+      
+      showNotification(
+        "success", 
+        `${articlesToProcess.length} articoli ${actionMessages[bulkActionConfirm.type]} con successo`
+      );
+      
+      // Resetta la selezione
+      setSelectedArticles([]);
+      setBulkActionConfirm(null);
+    } catch (error) {
+      console.error("Errore durante l'esecuzione dell'azione di massa:", error);
+      showNotification("error", "Si è verificato un errore durante l'esecuzione dell'azione");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -773,14 +965,10 @@ export default function ManageArticlesPage() {
           >
             <div className="text-center mb-6">
               <div className="mx-auto w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mb-4">
-                <FiAlertCircle className="h-6 w-6 text-red-600 dark:text-red-400" />
+                <FiTrash2 className="h-6 w-6 text-red-600 dark:text-red-400" />
               </div>
-              <h2 className="text-xl font-serif font-bold text-zinc-900 dark:text-zinc-50 mb-2">
-                Conferma eliminazione
-              </h2>
-              <p className="text-zinc-600 dark:text-zinc-300">
-                Sei sicuro di voler eliminare questo articolo? Questa azione non può essere annullata.
-              </p>
+              <h2 className="text-xl font-serif font-bold text-zinc-900 dark:text-zinc-50 mb-2">Conferma eliminazione</h2>
+              <p className="text-zinc-600 dark:text-zinc-300">Sei sicuro di voler eliminare questo articolo? Questa azione non può essere annullata.</p>
             </div>
             
             <div className="flex gap-3 justify-center">
@@ -1284,13 +1472,13 @@ export default function ManageArticlesPage() {
           </motion.p>
         </motion.div>
         
-        {/* Search bar with animation */}
+        {/* Search bar with animation - now with sticky positioning */}
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.6 }}
           style={{ y: searchBarY }}
-          className="backdrop-blur-xl bg-white/15 dark:bg-zinc-800/20 border border-white/30 dark:border-white/10 rounded-2xl shadow-xl p-4 mb-6"
+          className="backdrop-blur-xl bg-white/15 dark:bg-zinc-800/20 border border-white/30 dark:border-white/10 rounded-2xl shadow-xl p-4 mb-6 sticky top-0 z-50"
         >
           <div className="flex flex-col sm:flex-row gap-4 items-center">
             <div className="w-full">
@@ -1304,9 +1492,84 @@ export default function ManageArticlesPage() {
               />
             </div>
           </div>
+          
+          {/* Filtri e Azioni di massa */}
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
+            {/* Filtri */}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowSuspended(!showSuspended)}
+                  className={`px-3 py-1.5 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors cursor-pointer ${
+                    showSuspended
+                      ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800/40'
+                      : 'bg-white/10 dark:bg-zinc-800/50 text-zinc-700 dark:text-zinc-300 hover:bg-white/20 dark:hover:bg-zinc-700/50'
+                  }`}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  {showSuspended ? "Tutti gli articoli" : "Solo sospesi"}
+                </button>
+              </div>
+              
+              {/* Mostra qui il pulsante "Carica altri/Nascondi" con testo adeguato */}
+              {filteredArticles.length > 5 && (
+                <button
+                  onClick={loadMoreArticles}
+                  className="px-3 py-1.5 rounded-lg flex items-center gap-2 text-sm font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800/40 transition-colors cursor-pointer"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 transform ${displayedArticles >= filteredArticles.length ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                  {displayedArticles >= filteredArticles.length 
+                    ? `Nascondi (${displayedArticles-5}/${filteredArticles.length-5})`
+                    : `Mostra altri ${Math.min(filteredArticles.length - displayedArticles, filteredArticles.length - 5)} articoli (${displayedArticles}/${filteredArticles.length})`
+                  }
+                </button>
+              )}
+            </div>
+            
+            {/* Azioni di massa */}
+            {selectedArticles.length > 0 && (
+              <div className="flex items-center gap-2">
+                {getSelectedArticlesStatus() !== 'all-suspended' && (
+                  <button
+                    onClick={() => confirmBulkAction('suspend')}
+                    className="px-3 py-1.5 rounded-lg flex items-center gap-2 text-sm font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-800/40 transition-colors cursor-pointer"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    {getSelectedArticlesStatus() === 'mixed' ? 'Sospendi attivi' : 'Sospendi'}
+                  </button>
+                )}
+                
+                {getSelectedArticlesStatus() !== 'all-active' && (
+                  <button
+                    onClick={() => confirmBulkAction('activate')}
+                    className="px-3 py-1.5 rounded-lg flex items-center gap-2 text-sm font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-800/40 transition-colors cursor-pointer"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3l14 9-14 9V3z" />
+                    </svg>
+                    {getSelectedArticlesStatus() === 'mixed' ? 'Riattiva sospesi' : 'Riattiva'}
+                  </button>
+                )}
+                
+                <button
+                  onClick={() => confirmBulkAction('delete')}
+                  className="px-3 py-1.5 rounded-lg flex items-center gap-2 text-sm font-medium bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800/40 transition-colors cursor-pointer"
+                >
+                  <FiTrash2 className="h-4 w-4" />
+                  Elimina
+                </button>
+              </div>
+            )}
+          </div>
         </motion.div>
         
-        {/* Table with enhanced parallax shadow effect */}
+        {/* Articles table with motion */}
         <motion.div 
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1316,12 +1579,32 @@ export default function ManageArticlesPage() {
             y: tableY,
             opacity: tableOpacity
           }}
-          className="backdrop-blur-xl bg-white/15 dark:bg-zinc-800/20 border border-white/30 dark:border-white/10 rounded-2xl p-4 overflow-x-auto max-h-[70vh] overflow-y-auto transition-all duration-500"
+          className="backdrop-blur-xl bg-white/15 dark:bg-zinc-800/20 border border-white/30 dark:border-white/10 rounded-2xl p-4 overflow-hidden transition-all duration-500"
         >
           {filteredArticles.length > 0 ? (
+            <div className="overflow-x-auto hidden-scrollbar">
             <table className="w-full border-collapse">
               <thead>
                 <tr className="border-b border-white/20">
+                    {/* Checkbox per selezionare tutti */}
+                    <th className="p-3 w-8">
+                      <div className="flex items-center justify-center">
+                        <div 
+                          className={`h-5 w-5 rounded border ${
+                            selectedArticles.length === filteredArticles.slice(0, displayedArticles).length && filteredArticles.length > 0
+                              ? 'bg-blue-500 border-blue-500 flex items-center justify-center' 
+                              : 'border-zinc-300 dark:border-zinc-600 cursor-pointer hover:border-blue-500'
+                          }`}
+                          onClick={selectAllDisplayedArticles}
+                        >
+                          {selectedArticles.length === filteredArticles.slice(0, displayedArticles).length && filteredArticles.length > 0 && (
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </div>
+                      </div>
+                    </th>
                   <th className="p-3 text-left text-sm font-medium text-zinc-600 dark:text-zinc-400">Immagine</th>
                   <th 
                     className="p-3 text-left text-sm font-medium text-zinc-600 dark:text-zinc-400 cursor-pointer hover:text-blue-500 dark:hover:text-blue-400"
@@ -1344,7 +1627,7 @@ export default function ManageArticlesPage() {
                     Data {sortBy === 'creazione' && (sortDirection === 'asc' ? '↑' : '↓')}
                   </th>
                   <th className="p-3 text-left text-sm font-medium text-zinc-600 dark:text-zinc-400">Tag</th>
-                  <th className="p-3 text-center text-sm font-medium text-zinc-600 dark:text-zinc-400">Prestazioni</th>
+                    <th className="p-3 text-center text-sm font-medium text-zinc-600 dark:text-zinc-400">Prestazioni</th>
                   <th className="p-3 text-center text-sm font-medium text-zinc-600 dark:text-zinc-400">Azioni</th>
                 </tr>
               </thead>
@@ -1352,7 +1635,11 @@ export default function ManageArticlesPage() {
                 {filteredArticles.slice(0, displayedArticles).map((article, index) => (
                   <motion.tr 
                     key={article.uuid} 
-                    className="border-b border-white/10 hover:bg-white/5 dark:hover:bg-zinc-800/40 transition-colors duration-200"
+                      className={`border-b border-white/10 transition-colors duration-300 ${
+                        selectedArticles.includes(article.uuid)
+                          ? 'bg-blue-500/5 dark:bg-blue-800/10 hover:bg-blue-500/10 dark:hover:bg-blue-800/20'
+                          : 'hover:bg-white/10 dark:hover:bg-zinc-800/50'
+                      }`}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ 
@@ -1361,10 +1648,27 @@ export default function ManageArticlesPage() {
                       ease: "easeOut"
                     }}
                     whileHover={{ 
-                      backgroundColor: "rgba(255, 255, 255, 0.07)",
-                      transition: { duration: 0.1 } 
-                    }}
-                  >
+                        boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
+                        transition: { duration: 0.2 } 
+                      }}
+                    >
+                      {/* Checkbox per selezionare */}
+                      <td className="p-3 text-center">
+                        <div 
+                          className={`h-5 w-5 rounded border mx-auto cursor-pointer ${
+                            selectedArticles.includes(article.uuid)
+                              ? 'bg-blue-500 border-blue-500 flex items-center justify-center' 
+                              : 'border-zinc-300 dark:border-zinc-600 hover:border-blue-500'
+                          }`}
+                          onClick={() => toggleSelectArticle(article.uuid)}
+                        >
+                          {selectedArticles.includes(article.uuid) && (
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </div>
+                      </td>
                     {/* Immagine */}
                     <td className="p-3 w-16">
                       <div className="relative h-12 w-12 rounded-md overflow-hidden">
@@ -1411,10 +1715,10 @@ export default function ManageArticlesPage() {
                           </span>
                         </div>
                       )}
-                      {article.status === 'suspended' && (
-                        <div className="mt-1 flex items-center">
-                          <span className="px-2 py-0.5 text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200 rounded-full">
-                            Sospeso
+                        {article.status === 'suspended' && (
+                          <div className="mt-1 flex items-center">
+                            <span className="px-2 py-0.5 text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200 rounded-full">
+                              Sospeso
                           </span>
                         </div>
                       )}
@@ -1434,143 +1738,143 @@ export default function ManageArticlesPage() {
                       </div>
                     </td>
                     
-                    {/* Statistiche riprogettate per migliore usabilità e semantica dei colori */}
+                      {/* Statistiche riprogettate per migliore usabilità e semantica dei colori */}
                     <td className="p-3">
-                      <div className="flex flex-col space-y-3 w-full max-w-[140px] mx-auto bg-white/10 dark:bg-zinc-800/30 p-2.5 rounded-xl shadow-sm border border-white/20 dark:border-zinc-700/40">
-                        {/* Indicatore di performance principale */}
-                        <div className="flex items-center justify-between">
-                          <FiTrendingUp
-                            className={`h-4 w-4 ${
-                              calculatePerformanceScore(article) >= 100 ? "text-green-500 dark:text-green-600" :
-                              calculatePerformanceScore(article) >= 70 ? "text-yellow-500 dark:text-yellow-600" :
-                              "text-red-500 dark:text-red-600"
-                            }`}
-                          />
-                          <div 
-                            className={`px-2 py-0.5 rounded-full text-xs font-bold tabular-nums text-white ${
-                              calculatePerformanceScore(article) >= 100 ? "bg-green-500 dark:bg-green-600" :
-                              calculatePerformanceScore(article) >= 70 ? "bg-yellow-500 dark:bg-yellow-600" :
-                              "bg-red-500 dark:bg-red-600"
-                            }`}
-                          >
-                            {calculatePerformanceScore(article)}%
+                        <div className="flex flex-col space-y-3 w-full max-w-[140px] mx-auto bg-white/10 dark:bg-zinc-800/30 p-2.5 rounded-xl shadow-sm border border-white/20 dark:border-zinc-700/40">
+                          {/* Indicatore di performance principale */}
+                          <div className="flex items-center justify-between">
+                            <FiTrendingUp
+                              className={`h-4 w-4 ${
+                                calculatePerformanceScore(article) >= 100 ? "text-green-500 dark:text-green-600" :
+                                calculatePerformanceScore(article) >= 70 ? "text-yellow-500 dark:text-yellow-600" :
+                                "text-red-500 dark:text-red-600"
+                              }`}
+                            />
+                            <div 
+                              className={`px-2 py-0.5 rounded-full text-xs font-bold tabular-nums text-white ${
+                                calculatePerformanceScore(article) >= 100 ? "bg-green-500 dark:bg-green-600" :
+                                calculatePerformanceScore(article) >= 70 ? "bg-yellow-500 dark:bg-yellow-600" :
+                                "bg-red-500 dark:bg-red-600"
+                              }`}
+                            >
+                              {calculatePerformanceScore(article)}%
                         </div>
                         </div>
-                        
-                        {/* Barra di performance con semantica dei colori */}
-                        <div className="h-2 w-full bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
-                          <div 
-                            className={`h-full rounded-full transition-all duration-500 ${
-                              calculatePerformanceScore(article) >= 100 ? "bg-green-500 dark:bg-green-600" :
-                              calculatePerformanceScore(article) >= 70 ? "bg-yellow-500 dark:bg-yellow-600" :
-                              "bg-red-500 dark:bg-red-600"
-                            }`}
-                            style={{ width: `${Math.min(calculatePerformanceScore(article), 100)}%` }}
-                          ></div>
-                        </div>
-                        
-                        {/* Metriche singole in layout più usabile */}
-                        <div className="flex items-center justify-between gap-2 text-xs pt-1 border-t border-zinc-200 dark:border-zinc-700/50">
-                          {/* Like */}
-                          <div className="flex flex-col items-center gap-1">
-                            <div className="flex items-center gap-1">
-                              <FiHeart className="h-3.5 w-3.5 text-rose-500 dark:text-rose-400" />
-                              <span className="font-medium tabular-nums text-zinc-900 dark:text-zinc-100">{article.upvote || 0}</span>
-                            </div>
-                            <div className="w-8 h-1.5 bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
-                              <div 
-                                className="h-full bg-rose-500 rounded-full"
-                                style={{ 
-                                  width: articles.length > 0 
-                                    ? `${Math.min(((article.upvote || 0) / articles.reduce((max, a) => Math.max(max, a.upvote || 0), 1)) * 100, 100)}%`
-                                    : '0%' 
-                                }}
-                              ></div>
-                            </div>
+                          
+                          {/* Barra di performance con semantica dei colori */}
+                          <div className="h-2 w-full bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
+                            <div 
+                              className={`h-full rounded-full transition-all duration-500 ${
+                                calculatePerformanceScore(article) >= 100 ? "bg-green-500 dark:bg-green-600" :
+                                calculatePerformanceScore(article) >= 70 ? "bg-yellow-500 dark:bg-yellow-600" :
+                                "bg-red-500 dark:bg-red-600"
+                              }`}
+                              style={{ width: `${Math.min(calculatePerformanceScore(article), 100)}%` }}
+                            ></div>
                           </div>
                           
-                          {/* Visualizzazioni */}
-                          <div className="flex flex-col items-center gap-1">
-                            <div className="flex items-center gap-1">
-                              <FiEye className="h-3.5 w-3.5 text-blue-500 dark:text-blue-400" />
-                              <span className="font-medium tabular-nums text-zinc-900 dark:text-zinc-100">{article.view || 0}</span>
+                          {/* Metriche singole in layout più usabile */}
+                          <div className="flex items-center justify-between gap-2 text-xs pt-1 border-t border-zinc-200 dark:border-zinc-700/50">
+                            {/* Like */}
+                            <div className="flex flex-col items-center gap-1">
+                              <div className="flex items-center gap-1">
+                                <FiHeart className="h-3.5 w-3.5 text-rose-500 dark:text-rose-400" />
+                                <span className="font-medium tabular-nums text-zinc-900 dark:text-zinc-100">{article.upvote || 0}</span>
+                              </div>
+                              <div className="w-8 h-1.5 bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
+                                <div 
+                                  className="h-full bg-rose-500 rounded-full"
+                                  style={{ 
+                                    width: articles.length > 0 
+                                      ? `${Math.min(((article.upvote || 0) / articles.reduce((max, a) => Math.max(max, a.upvote || 0), 1)) * 100, 100)}%`
+                                      : '0%' 
+                                  }}
+                                ></div>
+                              </div>
                             </div>
-                            <div className="w-8 h-1.5 bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
-                              <div 
-                                className="h-full bg-blue-500 rounded-full"
-                                style={{ 
-                                  width: articles.length > 0 
-                                    ? `${Math.min(((article.view || 0) / articles.reduce((max, a) => Math.max(max, a.view || 0), 1)) * 100, 100)}%` 
-                                    : '0%' 
-                                }}
-                              ></div>
+                            
+                            {/* Visualizzazioni */}
+                            <div className="flex flex-col items-center gap-1">
+                              <div className="flex items-center gap-1">
+                                <FiEye className="h-3.5 w-3.5 text-blue-500 dark:text-blue-400" />
+                                <span className="font-medium tabular-nums text-zinc-900 dark:text-zinc-100">{article.view || 0}</span>
+                              </div>
+                              <div className="w-8 h-1.5 bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
+                                <div 
+                                  className="h-full bg-blue-500 rounded-full"
+                                  style={{ 
+                                    width: articles.length > 0 
+                                      ? `${Math.min(((article.view || 0) / articles.reduce((max, a) => Math.max(max, a.view || 0), 1)) * 100, 100)}%` 
+                                      : '0%' 
+                                  }}
+                                ></div>
+                              </div>
                             </div>
-                          </div>
-                          
-                          {/* Condivisioni */}
-                          <div className="flex flex-col items-center gap-1">
-                            <div className="flex items-center gap-1">
-                              <FiShare2 className="h-3.5 w-3.5 text-purple-500 dark:text-purple-400" />
-                              <span className="font-medium tabular-nums text-zinc-900 dark:text-zinc-100">{article.shared || 0}</span>
+                            
+                            {/* Condivisioni */}
+                            <div className="flex flex-col items-center gap-1">
+                              <div className="flex items-center gap-1">
+                                <FiShare2 className="h-3.5 w-3.5 text-purple-500 dark:text-purple-400" />
+                                <span className="font-medium tabular-nums text-zinc-900 dark:text-zinc-100">{article.shared || 0}</span>
+                              </div>
+                              <div className="w-8 h-1.5 bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
+                                <div 
+                                  className="h-full bg-purple-500 rounded-full"
+                                  style={{ 
+                                    width: articles.length > 0 
+                                      ? `${Math.min(((article.shared || 0) / articles.reduce((max, a) => Math.max(max, a.shared || 0), 1)) * 100, 100)}%` 
+                                      : '0%' 
+                                  }}
+                                ></div>
+                              </div>
                             </div>
-                            <div className="w-8 h-1.5 bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
-                              <div 
-                                className="h-full bg-purple-500 rounded-full"
-                                style={{ 
-                                  width: articles.length > 0 
-                                    ? `${Math.min(((article.shared || 0) / articles.reduce((max, a) => Math.max(max, a.shared || 0), 1)) * 100, 100)}%` 
-                                    : '0%' 
-                                }}
-                              ></div>
-                            </div>
-                          </div>
                         </div>
                       </div>
                     </td>
                     
                     {/* Azioni */}
                     <td className="p-3">
-                      <div className="flex flex-col p-2 gap-2 bg-white/10 dark:bg-zinc-800/40 rounded-xl border border-white/20 dark:border-zinc-700/40 shadow-sm">
-                        {/* Prima riga di pulsanti: stop/via e delete */}
-                        <div className="flex justify-center gap-2">
-                          {isSuperior && (
-                            <>
-                              <button 
-                                className={`p-2 rounded-full transition-colors duration-200 cursor-pointer ${
-                                  article.status === 'suspended'
-                                    ? 'bg-green-100 dark:bg-green-900/20 text-green-600 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/40'
-                                    : 'bg-amber-100 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-900/40'
-                                }`}
-                                onClick={() => toggleArticleStatus(article)}
-                                title={article.status === 'suspended' ? "Riattiva articolo" : "Sospendi articolo"}
-                              >
-                                {article.status === 'suspended' ? (
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3l14 9-14 9V3z" />
-                                  </svg>
-                                ) : (
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                  </svg>
-                                )}
-                              </button>
-                              
-                              <button 
-                                className="p-2 rounded-full bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/40 transition-colors duration-200 cursor-pointer"
-                                onClick={() => setDeleteConfirm(article.uuid)}
-                                title="Elimina articolo"
-                              >
-                                <FiTrash2 className="h-4 w-4" />
-                              </button>
-                            </>
-                          )}
-                        </div>
-                        
-                        {/* Seconda riga di pulsanti: edit e revision */}
+                        <div className="flex flex-col p-2 gap-2 bg-white/10 dark:bg-zinc-800/40 rounded-xl border border-white/20 dark:border-zinc-700/40 shadow-sm">
+                          {/* Prima riga di pulsanti: stop/via e delete */}
+                      <div className="flex justify-center gap-2">
+                            {isSuperior && (
+                              <>
+                          <button 
+                                  className={`p-2 rounded-full transition-colors duration-200 cursor-pointer ${
+                                    article.status === 'suspended'
+                                      ? 'bg-green-100 dark:bg-green-900/20 text-green-600 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/40'
+                                      : 'bg-amber-100 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-900/40'
+                                  }`}
+                                  onClick={() => toggleArticleStatus(article)}
+                                  title={article.status === 'suspended' ? "Riattiva articolo" : "Sospendi articolo"}
+                                >
+                                  {article.status === 'suspended' ? (
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3l14 9-14 9V3z" />
+                            </svg>
+                                  ) : (
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                  )}
+                          </button>
+                                
+                                <button 
+                                  className="p-2 rounded-full bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/40 transition-colors duration-200 cursor-pointer"
+                                  onClick={() => setDeleteConfirm(article.uuid)}
+                                  title="Elimina articolo"
+                                >
+                                  <FiTrash2 className="h-4 w-4" />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                          
+                          {/* Seconda riga di pulsanti: edit e revision */}
                         {isSuperior && (
-                          <div className="flex justify-center gap-2">
+                            <div className="flex justify-center gap-2">
                             <button 
-                              className="p-2 rounded-full bg-blue-100 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/40 transition-colors duration-200 cursor-pointer"
+                                className="p-2 rounded-full bg-blue-100 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/40 transition-colors duration-200 cursor-pointer"
                               onClick={() => {
                                 setEditingArticle(article);
                                 setEditFormData({
@@ -1594,32 +1898,32 @@ export default function ManageArticlesPage() {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                               </svg>
                             </button>
-                            
-                            {/* Pulsante per revisione in viola */}
+                              
+                              {/* Pulsante per revisione in viola */}
                             <button 
-                              className="p-2 rounded-full bg-purple-100 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-purple-900/40 transition-colors duration-200 cursor-pointer"
-                              onClick={() => setRevisionConfirm(article.uuid)}
-                              title="Invia in revisione"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                              </svg>
+                                className="p-2 rounded-full bg-purple-100 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-purple-900/40 transition-colors duration-200 cursor-pointer"
+                                onClick={() => setRevisionConfirm(article.uuid)}
+                                title="Invia in revisione"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
                             </button>
-                          </div>
-                        )}
-                        
-                        {/* Indicatore di articolo programmato */}
-                        {article.status === 'scheduled' && article.scheduleDate && (
-                          <div className="flex justify-center">
+                            </div>
+                          )}
+                          
+                          {/* Indicatore di articolo programmato */}
+                          {article.status === 'scheduled' && article.scheduleDate && (
+                            <div className="flex justify-center">
                             <button 
-                              className="p-2 rounded-full bg-purple-100 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-purple-900/40 transition-colors duration-200 cursor-pointer"
-                              title="Programmato per pubblicazione"
+                                className="p-2 rounded-full bg-purple-100 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-purple-900/40 transition-colors duration-200 cursor-pointer"
+                                title="Programmato per pubblicazione"
                             >
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              </svg>
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
                             </button>
-                          </div>
+                            </div>
                         )}
                       </div>
                     </td>
@@ -1627,6 +1931,7 @@ export default function ManageArticlesPage() {
                 ))}
               </tbody>
             </table>
+            </div>
           ) : (
             <motion.div 
               className="py-12 text-center"
@@ -1654,18 +1959,6 @@ export default function ManageArticlesPage() {
             </motion.div>
           )}
         </motion.div>
-        
-        {/* Move the Load More button inside the scrollable container */}
-        {filteredArticles.length > displayedArticles && (
-          <div className="flex justify-center mt-6 sticky bottom-4 z-10">
-            <Button 
-              onClick={loadMoreArticles}
-              className="bg-blue-600 text-white hover:bg-blue-700 transition-colors duration-200 px-5 py-2 rounded-xl shadow-lg"
-            >
-              Mostra altri 5 articoli
-            </Button>
-          </div>
-        )}
       </div>
       
       {/* Aggiungi il popup di conferma della revisione dopo il popup di eliminazione */}
@@ -1711,6 +2004,111 @@ export default function ManageArticlesPage() {
           </motion.div>
         </motion.div>
       )}
+      {/* Popup di conferma per le azioni di massa */}
+      {bulkActionConfirm && (
+        <motion.div 
+          initial={{ opacity: 0, backdropFilter: "blur(0px)" }}
+          animate={{ opacity: 1, backdropFilter: "blur(5px)" }}
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+        >
+          <motion.div
+            initial={{ scale: 0.9, y: 20 }}
+            animate={{ scale: 1, y: 0 }}
+            className="bg-white dark:bg-zinc-800 rounded-2xl shadow-2xl w-full max-w-md p-6"
+          >
+            <div className="text-center mb-6">
+              {/* Icona in base al tipo di azione */}
+              <div className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center mb-4 ${
+                bulkActionConfirm.type === 'delete' ? 'bg-red-100 dark:bg-red-900/30' :
+                bulkActionConfirm.type === 'suspend' ? 'bg-amber-100 dark:bg-amber-900/30' :
+                bulkActionConfirm.type === 'activate' ? 'bg-green-100 dark:bg-green-900/30' :
+                'bg-purple-100 dark:bg-purple-900/30'
+              }`}>
+                {bulkActionConfirm.type === 'delete' && (
+                  <FiTrash2 className="h-6 w-6 text-red-600 dark:text-red-400" />
+                )}
+                {bulkActionConfirm.type === 'suspend' && (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                )}
+                {bulkActionConfirm.type === 'activate' && (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3l14 9-14 9V3z" />
+                  </svg>
+                )}
+                {bulkActionConfirm.type === 'revision' && (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-purple-600 dark:text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                )}
+              </div>
+              <h2 className="text-xl font-serif font-bold text-zinc-900 dark:text-zinc-50 mb-2">
+                {bulkActionConfirm.type === 'delete' && "Conferma eliminazione multipla"}
+                {bulkActionConfirm.type === 'suspend' && 
+                  (getSelectedArticlesStatus() === 'mixed' 
+                    ? "Conferma sospensione articoli attivi" 
+                    : "Conferma sospensione multipla")}
+                {bulkActionConfirm.type === 'activate' && 
+                  (getSelectedArticlesStatus() === 'mixed' 
+                    ? "Conferma riattivazione articoli sospesi" 
+                    : "Conferma riattivazione multipla")}
+                {bulkActionConfirm.type === 'revision' && "Conferma invio in revisione"}
+              </h2>
+              <p className="text-zinc-600 dark:text-zinc-300">
+                {bulkActionConfirm.type === 'delete' && (
+                  `Stai per eliminare ${bulkActionConfirm.count} articoli. Questa azione non può essere annullata.`
+                )}
+                {bulkActionConfirm.type === 'suspend' && (
+                  getSelectedArticlesStatus() === 'mixed'
+                    ? `Stai per sospendere solo gli articoli attivi tra quelli selezionati. Gli articoli non saranno visibili fino alla riattivazione.`
+                    : `Stai per sospendere ${bulkActionConfirm.count} articoli. Gli articoli non saranno visibili fino alla riattivazione.`
+                )}
+                {bulkActionConfirm.type === 'activate' && (
+                  getSelectedArticlesStatus() === 'mixed'
+                    ? `Stai per riattivare solo gli articoli sospesi tra quelli selezionati. Gli articoli torneranno ad essere visibili.`
+                    : `Stai per riattivare ${bulkActionConfirm.count} articoli. Gli articoli torneranno ad essere visibili.`
+                )}
+                {bulkActionConfirm.type === 'revision' && (
+                  `Stai per inviare ${bulkActionConfirm.count} articoli in revisione. Gli articoli non saranno visibili fino all&apos;approvazione.`
+                )}
+              </p>
+            </div>
+            
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={() => setBulkActionConfirm(null)}
+                className="px-4 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-700 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-colors duration-200 cursor-pointer"
+              >
+                Annulla
+              </button>
+              <button
+                onClick={executeBulkAction}
+                className={`px-4 py-2 rounded-xl text-white transition-colors duration-200 cursor-pointer ${
+                  bulkActionConfirm.type === 'delete' ? 'bg-red-600 hover:bg-red-700' :
+                  bulkActionConfirm.type === 'suspend' ? 'bg-amber-600 hover:bg-amber-700' :
+                  bulkActionConfirm.type === 'activate' ? 'bg-green-600 hover:bg-green-700' :
+                  'bg-purple-600 hover:bg-purple-700'
+                }`}
+              >
+                Conferma
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+      {/* Aggiungi pulsante "Torna in cima" alla fine della lista degli articoli */}
+      <div className="flex justify-center mt-8 mb-10">
+        <button
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/15 dark:bg-zinc-800/30 border border-white/30 dark:border-white/10 shadow-lg backdrop-blur-md hover:bg-white/30 dark:hover:bg-zinc-700/40 transition-all duration-300 text-zinc-800 dark:text-zinc-200 cursor-pointer"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+          </svg>
+          Torna in cima
+        </button>
+      </div>
     </motion.main>
   )
 } 
