@@ -67,6 +67,8 @@ export default function ManageArticlesPage() {
   const [authors, setAuthors] = useState<string[]>([])
   const [showAuthorDropdown, setShowAuthorDropdown] = useState(false)
   const authorDropdownRef = useRef<HTMLDivElement>(null)
+  // Aggiungi questo state per gestire la conferma di revisione
+  const [revisionConfirm, setRevisionConfirm] = useState<string | null>(null)
 
   // Add scroll tracking for parallax effects
   const { scrollY } = useScroll()
@@ -595,6 +597,29 @@ export default function ManageArticlesPage() {
     };
   }, []);
 
+  // Aggiungi questa funzione per mandare l'articolo in revisione
+  const sendToRevision = async (uuid: string) => {
+    try {
+      const articleRef = ref(db, `articoli/${uuid}`);
+      await update(articleRef, {
+        status: 'revision'
+      });
+      
+      // Aggiorna la lista degli articoli
+      setArticles(articles.map(article => 
+        article.uuid === uuid 
+          ? { ...article, status: 'revision' }
+          : article
+      ));
+      
+      showNotification("success", "Articolo inviato in revisione");
+      setRevisionConfirm(null);
+    } catch (error) {
+      console.error("Errore durante l'invio in revisione:", error);
+      showNotification("error", "Errore durante l'invio in revisione dell'articolo");
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-zinc-100 to-zinc-200/90 dark:from-zinc-900 dark:to-zinc-800">
@@ -805,16 +830,16 @@ export default function ManageArticlesPage() {
                   Titolo * <span className="text-xs text-zinc-500">(max 100 caratteri)</span>
                 </label>
                 <div className="relative">
-                  <input
-                    type="text"
-                    value={editFormData.titolo}
+                <input
+                  type="text"
+                  value={editFormData.titolo}
                     onChange={(e) => {
                       if (e.target.value.length <= 100) {
                         setEditFormData({...editFormData, titolo: e.target.value});
                       }
                     }}
                     maxLength={100}
-                    className="w-full p-3 bg-white/5 border border-white/20 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
+                  className="w-full p-3 bg-white/5 border border-white/20 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
                     placeholder="Inserisci il titolo dell'articolo"
                     required
                   />
@@ -1386,6 +1411,13 @@ export default function ManageArticlesPage() {
                           </span>
                         </div>
                       )}
+                      {article.status === 'suspended' && (
+                        <div className="mt-1 flex items-center">
+                          <span className="px-2 py-0.5 text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200 rounded-full">
+                            Sospeso
+                          </span>
+                        </div>
+                      )}
                     </td>
                     
                     {/* Tag */}
@@ -1422,7 +1454,7 @@ export default function ManageArticlesPage() {
                             }`}
                           >
                             {calculatePerformanceScore(article)}%
-                          </div>
+                        </div>
                         </div>
                         
                         {/* Barra di performance con semantica dei colori */}
@@ -1498,21 +1530,47 @@ export default function ManageArticlesPage() {
                     
                     {/* Azioni */}
                     <td className="p-3">
-                      <div className="flex justify-center gap-2">
-                        {article.status === 'scheduled' && (
-                          <button 
-                            className="p-2 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-purple-100 dark:hover:bg-purple-900/30 hover:text-purple-600 dark:hover:text-purple-400 transition-colors duration-200 cursor-pointer"
-                            title="Programmato per pubblicazione"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                          </button>
-                        )}
+                      <div className="flex flex-col p-2 gap-2 bg-white/10 dark:bg-zinc-800/40 rounded-xl border border-white/20 dark:border-zinc-700/40 shadow-sm">
+                        {/* Prima riga di pulsanti: stop/via e delete */}
+                        <div className="flex justify-center gap-2">
+                          {isSuperior && (
+                            <>
+                              <button 
+                                className={`p-2 rounded-full transition-colors duration-200 cursor-pointer ${
+                                  article.status === 'suspended'
+                                    ? 'bg-green-100 dark:bg-green-900/20 text-green-600 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/40'
+                                    : 'bg-amber-100 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-900/40'
+                                }`}
+                                onClick={() => toggleArticleStatus(article)}
+                                title={article.status === 'suspended' ? "Riattiva articolo" : "Sospendi articolo"}
+                              >
+                                {article.status === 'suspended' ? (
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3l14 9-14 9V3z" />
+                                  </svg>
+                                ) : (
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                )}
+                              </button>
+                              
+                              <button 
+                                className="p-2 rounded-full bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/40 transition-colors duration-200 cursor-pointer"
+                                onClick={() => setDeleteConfirm(article.uuid)}
+                                title="Elimina articolo"
+                              >
+                                <FiTrash2 className="h-4 w-4" />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                        
+                        {/* Seconda riga di pulsanti: edit e revision */}
                         {isSuperior && (
-                          <>
+                          <div className="flex justify-center gap-2">
                             <button 
-                              className="p-2 rounded-full bg-zinc-100 dark:bg-zinc-800 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors duration-200 cursor-pointer"
+                              className="p-2 rounded-full bg-blue-100 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/40 transition-colors duration-200 cursor-pointer"
                               onClick={() => {
                                 setEditingArticle(article);
                                 setEditFormData({
@@ -1536,33 +1594,32 @@ export default function ManageArticlesPage() {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                               </svg>
                             </button>
+                            
+                            {/* Pulsante per revisione in viola */}
                             <button 
-                              className={`p-2 rounded-full bg-zinc-100 dark:bg-zinc-800 transition-colors duration-200 cursor-pointer ${
-                                article.status === 'suspended'
-                                  ? 'text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/30'
-                                  : 'text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/30'
-                              }`}
-                              onClick={() => toggleArticleStatus(article)}
-                              title={article.status === 'suspended' ? "Riattiva articolo" : "Sospendi articolo"}
+                              className="p-2 rounded-full bg-purple-100 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-purple-900/40 transition-colors duration-200 cursor-pointer"
+                              onClick={() => setRevisionConfirm(article.uuid)}
+                              title="Invia in revisione"
                             >
-                              {article.status === 'suspended' ? (
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3l14 9-14 9V3z" />
-                                </svg>
-                              ) : (
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                              )}
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
                             </button>
+                          </div>
+                        )}
+                        
+                        {/* Indicatore di articolo programmato */}
+                        {article.status === 'scheduled' && article.scheduleDate && (
+                          <div className="flex justify-center">
                             <button 
-                              className="p-2 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-red-100 dark:hover:bg-red-900/30 hover:text-red-600 dark:hover:text-red-400 transition-colors duration-200 cursor-pointer"
-                              onClick={() => setDeleteConfirm(article.uuid)}
-                              title="Elimina articolo"
+                              className="p-2 rounded-full bg-purple-100 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-purple-900/40 transition-colors duration-200 cursor-pointer"
+                              title="Programmato per pubblicazione"
                             >
-                              <FiTrash2 className="h-4 w-4" />
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
                             </button>
-                          </>
+                          </div>
                         )}
                       </div>
                     </td>
@@ -1610,6 +1667,50 @@ export default function ManageArticlesPage() {
           </div>
         )}
       </div>
+      
+      {/* Aggiungi il popup di conferma della revisione dopo il popup di eliminazione */}
+      {revisionConfirm && (
+        <motion.div 
+          initial={{ opacity: 0, backdropFilter: "blur(0px)" }}
+          animate={{ opacity: 1, backdropFilter: "blur(5px)" }}
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+        >
+          <motion.div
+            initial={{ scale: 0.9, y: 20 }}
+            animate={{ scale: 1, y: 0 }}
+            className="bg-white dark:bg-zinc-800 rounded-2xl shadow-2xl w-full max-w-md p-6"
+          >
+            <div className="text-center mb-6">
+              <div className="mx-auto w-12 h-12 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-purple-600 dark:text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <h2 className="text-xl font-serif font-bold text-zinc-900 dark:text-zinc-50 mb-2">
+                Conferma invio in revisione
+              </h2>
+              <p className="text-zinc-600 dark:text-zinc-300">
+                Sei sicuro di voler inviare questo articolo in revisione? L&apos;articolo non sarà più visibile fino all&apos;approvazione.
+              </p>
+            </div>
+            
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={() => setRevisionConfirm(null)}
+                className="px-4 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-700 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-colors duration-200 cursor-pointer"
+              >
+                Annulla
+              </button>
+              <button
+                onClick={() => sendToRevision(revisionConfirm)}
+                className="px-4 py-2 rounded-xl bg-purple-600 text-white hover:bg-purple-700 transition-colors duration-200 cursor-pointer"
+              >
+                Conferma
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
     </motion.main>
   )
 } 
