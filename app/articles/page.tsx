@@ -6,7 +6,7 @@ import { ref, get, update, increment } from "firebase/database"
 import { db } from "../firebase"
 import { FiHeart, FiShare2, FiEye, FiClock, FiArrowLeft, FiUser } from "react-icons/fi"
 import Link from "next/link"
-import { motion } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion"
 import { AnimatedCounter } from "../components/AnimatedCounter"
 import { auth } from "../firebase"
 
@@ -37,6 +37,12 @@ const topics = [
   "ARTE & CULTURA",
   "ITALIA"
 ]
+
+// Aggiungi un'interfaccia per gli autori con conteggio
+interface AuthorWithCount {
+  name: string;
+  count: number;
+}
 
 export default function Articles() {
   const [articles, setArticles] = useState<ArticleData[]>([])
@@ -245,29 +251,57 @@ export default function Articles() {
     });
   };
 
-  // Aggiungi questi stati dopo la dichiarazione degli altri stati
-  const [authors, setAuthors] = useState<string[]>([])
+  // Modifica gli stati
+  const [authors, setAuthors] = useState<AuthorWithCount[]>([])
   const [selectedAuthors, setSelectedAuthors] = useState<string[]>([])
 
-
-  // Aggiungi questo useEffect per caricare gli autori da Firebase
+  // Aggiorna la funzione fetchAuthors per contare gli articoli per ciascun autore
   useEffect(() => {
     const fetchAuthors = async () => {
       try {
-        const authorsRef = ref(db, 'autori')
-        const snapshot = await get(authorsRef)
+        // Prima ottieni gli articoli per contare quelli per autore
+        const articlesRef = ref(db, 'articoli')
+        const articlesSnapshot = await get(articlesRef)
         
-        if (snapshot.exists()) {
-          const authorsData: string[] = []
-          snapshot.forEach((childSnapshot) => {
+        // Contatore per gli articoli per autore
+        const authorCounts: Record<string, number> = {};
+        
+        if (articlesSnapshot.exists()) {
+          articlesSnapshot.forEach((childSnapshot) => {
+            const article = childSnapshot.val();
+            // Conta solo articoli con status 'accepted' o senza status
+            if (article.status === 'accepted' || !article.status) {
+              const authorName = article.autore;
+              if (authorName) {
+                authorCounts[authorName] = (authorCounts[authorName] || 0) + 1;
+              }
+            }
+          });
+        }
+        
+        // Poi ottieni l'elenco degli autori
+        const authorsRef = ref(db, 'autori')
+        const authorsSnapshot = await get(authorsRef)
+        
+        if (authorsSnapshot.exists()) {
+          const authorsData: AuthorWithCount[] = []
+          authorsSnapshot.forEach((childSnapshot) => {
             if (childSnapshot.val().name) {
-              authorsData.push(childSnapshot.val().name);
+              const authorName = childSnapshot.val().name;
+              // Includi il conteggio degli articoli se disponibile
+              authorsData.push({
+                name: authorName,
+                count: authorCounts[authorName] || 0
+              });
             }
           })
           
-          // Elimina i duplicati e ordina alfabeticamente
-          const uniqueAuthors = [...new Set(authorsData)].sort();
-          setAuthors(uniqueAuthors)
+          // Ordina alfabeticamente, tenendo conto dell'italiano e ignorando maiuscole/minuscole
+          const sortedAuthors = authorsData.sort((a, b) => 
+            a.name.localeCompare(b.name, 'it', { sensitivity: 'base' })
+          );
+          
+          setAuthors(sortedAuthors)
         }
       } catch (error) {
         console.error("Errore nel recupero degli autori:", error)
@@ -277,12 +311,12 @@ export default function Articles() {
     fetchAuthors()
   }, [])
 
-  // Aggiungi questa funzione per gestire il toggle degli autori
-  const toggleAuthor = (author: string) => {
+  // Aggiorna la funzione toggle per considerare solo il nome dell'autore
+  const toggleAuthor = (authorName: string) => {
     setSelectedAuthors(prev => 
-      prev.includes(author) 
-        ? prev.filter(a => a !== author)
-        : [...prev, author]
+      prev.includes(authorName) 
+        ? prev.filter(a => a !== authorName)
+        : [...prev, authorName]
     )
   }
 
@@ -547,12 +581,12 @@ export default function Articles() {
             ))}
           </div>
 
-          {/* Pulsante mostra/nascondi filtri */}
-          <div className="flex justify-center mt-4">
+          {/* Pulsante mostra/nascondi filtri e reset filtri */}
+          <div className="flex justify-center mt-4 gap-3">
             <motion.button
               onClick={() => setShowFilters(!showFilters)}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
               transition={{ duration: 0.5, delay: 1.1 }}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
@@ -582,142 +616,198 @@ export default function Articles() {
                 </>
               )}
             </motion.button>
+            
+            <AnimatePresence mode="wait">
+              {(selectedTags.length > 0 || selectedAuthors.length > 0 || searchQuery) && (
+                <motion.button
+                  key="reset-filters"
+                  onClick={() => {
+                    setSelectedTags([]);
+                    setSelectedAuthors([]);
+                    setSearchQuery("");
+                  }}
+                  initial={{ opacity: 0, width: 0, marginLeft: 0 }}
+                  animate={{ 
+                    opacity: 1, 
+                    width: "auto", 
+                    marginLeft: "0.75rem",
+                    transition: { 
+                      opacity: { duration: 0.3, ease: "easeInOut" },
+                      width: { duration: 0.3, ease: "easeInOut" },
+                      marginLeft: { duration: 0.3, ease: "easeInOut" }
+                    }
+                  }}
+                  exit={{ 
+                    opacity: 0, 
+                    width: 0, 
+                    marginLeft: 0,
+                    transition: { 
+                      opacity: { duration: 0.2, ease: "easeInOut" },
+                      width: { duration: 0.2, ease: "easeInOut", delay: 0.1 },
+                      marginLeft: { duration: 0.2, ease: "easeInOut" }
+                    }
+                  }}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl
+                    font-medium text-sm transition-colors duration-300 cursor-pointer
+                    whitespace-nowrap overflow-hidden
+                    bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg shadow-red-500/25"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  <span className="flex-shrink-0">Rimuovi tutti i filtri</span>
+                </motion.button>
+              )}
+            </AnimatePresence>
           </div>
         </motion.div>
 
         {/* Topics Navigation con layout a colonne - condizionale in base allo stato showFilters */}
-        {showFilters && (
-          <motion.div 
-            initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
-            animate={{ 
-              opacity: 1, 
-              height: 'auto',
-              transition: { duration: 0.4, ease: "easeOut" }
-            }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.3 }}
-            className="mb-8"
-          >
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-7xl mx-auto">
-              {/* Colonna per i tag */}
-              <div className="rounded-2xl bg-white/5 dark:bg-zinc-800/20 backdrop-blur-lg border border-white/10 p-4">
-                <h3 className="text-zinc-800 dark:text-zinc-200 font-medium mb-3 flex items-center gap-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                  </svg>
-                  Filtra per categorie {selectedTags.length > 0 && `(${selectedTags.length})`}
-                </h3>
-                
-                <div className="flex flex-wrap gap-2">
-                  {topics.map((topic, index) => (
+        <AnimatePresence>
+          {showFilters && (
+            <motion.div 
+              key="filters"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ 
+                opacity: 1, 
+                height: 'auto',
+                transition: { duration: 0.4, ease: "easeOut" }
+              }}
+              exit={{ 
+                opacity: 0, 
+                height: 0,
+                transition: { duration: 0.3, ease: "easeIn" }
+              }}
+              className="mb-8 overflow-hidden"
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-7xl mx-auto">
+                {/* Colonna per i tag */}
+                <div className="rounded-2xl bg-white/5 dark:bg-zinc-800/20 backdrop-blur-lg border border-white/10 p-4">
+                  <h3 className="text-zinc-800 dark:text-zinc-200 font-medium mb-3 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                    </svg>
+                    Filtra per categorie {selectedTags.length > 0 && `(${selectedTags.length})`}
+                  </h3>
+                  
+                  <div className="flex flex-wrap gap-2">
+                    {topics.map((topic, index) => (
+                      <motion.button
+                        key={topic}
+                        onClick={() => toggleTag(topic)}
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ duration: 0.4, delay: 0.1 + (index * 0.02) }}
+                        whileHover={{ scale: 1.05, y: -2 }}
+                        whileTap={{ scale: 0.95 }}
+                        className={`
+                          flex items-center px-3 py-1.5 text-xs font-medium
+                          rounded-xl transition-all duration-300 cursor-pointer
+                          ${selectedTags.includes(topic)
+                            ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-md shadow-amber-500/25'
+                            : 'bg-white/10 dark:bg-zinc-800/50 text-zinc-700 dark:text-zinc-300 hover:bg-white/20 dark:hover:bg-zinc-700/70'
+                          }
+                          border border-white/10
+                        `}
+                      >
+                        {topic}
+                      </motion.button>
+                    ))}
+                  </div>
+                  
+                  {selectedTags.length > 0 && (
                     <motion.button
-                      key={topic}
-                      onClick={() => toggleTag(topic)}
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ duration: 0.4, delay: 0.1 + (index * 0.02) }}
-                      whileHover={{ scale: 1.05, y: -2 }}
+                      onClick={() => setSelectedTags([])}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.5, delay: 0.3 }}
+                      whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      className={`
-                        flex items-center px-3 py-1.5 text-xs font-medium
-                        rounded-xl transition-all duration-300 cursor-pointer
-                        ${selectedTags.includes(topic)
-                          ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-md shadow-amber-500/25'
-                          : 'bg-white/10 dark:bg-zinc-800/50 text-zinc-700 dark:text-zinc-300 hover:bg-white/20 dark:hover:bg-zinc-700/70'
-                        }
-                        border border-white/10
-                      `}
+                      className="mt-4 text-sm font-medium px-4 py-2 rounded-lg
+                        text-zinc-500 dark:text-zinc-400 hover:text-amber-500 dark:hover:text-amber-400 
+                        transition-all duration-300 hover:bg-white/10 dark:hover:bg-zinc-700/50
+                        bg-white/5 dark:bg-zinc-800/50 flex items-center justify-center gap-2"
                     >
-                      {topic}
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      Rimuovi filtri categoria
                     </motion.button>
-                  ))}
+                  )}
                 </div>
                 
-                {selectedTags.length > 0 && (
-                  <motion.button
-                    onClick={() => setSelectedTags([])}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: 0.3 }}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    className="mt-4 text-sm font-medium px-4 py-2 rounded-lg
-                      text-zinc-500 dark:text-zinc-400 hover:text-amber-500 dark:hover:text-amber-400 
-                      transition-all duration-300 hover:bg-white/10 dark:hover:bg-zinc-700/50
-                      bg-white/5 dark:bg-zinc-800/50 flex items-center justify-center gap-2"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                    Rimuovi filtri categoria
-                  </motion.button>
-                )}
-              </div>
-              
-              {/* Colonna per gli autori */}
-              <div className="rounded-2xl bg-white/5 dark:bg-zinc-800/20 backdrop-blur-lg border border-white/10 p-4">
-                <h3 className="text-zinc-800 dark:text-zinc-200 font-medium mb-3 flex items-center gap-2">
-                  <FiUser className="h-5 w-5 text-blue-500" />
-                  Filtra per autori {selectedAuthors.length > 0 && `(${selectedAuthors.length})`}
-                </h3>
-                
-                <div className="max-h-[240px] overflow-y-auto pr-2 custom-scrollbar">
-                  <div className="flex flex-wrap gap-2">
+                {/* Colonna per gli autori con raggruppamento per iniziale */}
+                <div className="rounded-2xl bg-white/5 dark:bg-zinc-800/20 backdrop-blur-lg border border-white/10 p-4">
+                  <h3 className="text-zinc-800 dark:text-zinc-200 font-medium mb-3 flex items-center gap-2">
+                    <FiUser className="h-5 w-5 text-blue-500" />
+                    Filtra per autori {selectedAuthors.length > 0 && `(${selectedAuthors.length})`}
+                  </h3>
+                  
+                  <div className="max-h-[240px] overflow-y-auto pr-2 custom-scrollbar">
                     {authors.length > 0 ? (
-                      authors.map((author, index) => (
-                        <motion.button
-                          key={author}
-                          onClick={() => toggleAuthor(author)}
-                          initial={{ opacity: 0, scale: 0.9 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          transition={{ duration: 0.4, delay: 0.1 + (index * 0.02) }}
-                          whileHover={{ scale: 1.05, y: -2 }}
-                          whileTap={{ scale: 0.95 }}
-                          className={`
-                            flex items-center gap-2 px-3 py-1.5 text-xs font-medium
-                            rounded-xl transition-all duration-300 cursor-pointer
-                            ${selectedAuthors.includes(author)
-                              ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md shadow-blue-500/25'
-                              : 'bg-white/10 dark:bg-zinc-800/50 text-zinc-700 dark:text-zinc-300 hover:bg-white/20 dark:hover:bg-zinc-700/70'
-                            }
-                            border border-white/10
-                          `}
-                        >
-                          <FiUser className="h-3 w-3" />
-                          {author}
-                        </motion.button>
-                      ))
+                      <div className="flex flex-wrap gap-2">
+                        {authors.map((author, index) => (
+                          <motion.button
+                            key={author.name}
+                            onClick={() => toggleAuthor(author.name)}
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ duration: 0.4, delay: 0.1 + (index * 0.02) }}
+                            whileHover={{ scale: 1.05, y: -2 }}
+                            whileTap={{ scale: 0.95 }}
+                            className={`
+                              flex items-center gap-2 px-3 py-1.5 text-xs font-medium
+                              rounded-xl transition-all duration-300 cursor-pointer
+                              ${selectedAuthors.includes(author.name)
+                                ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md shadow-blue-500/25'
+                                : 'bg-white/10 dark:bg-zinc-800/50 text-zinc-700 dark:text-zinc-300 hover:bg-white/20 dark:hover:bg-zinc-700/70'
+                              }
+                              border border-white/10
+                            `}
+                          >
+                            <FiUser className="h-3 w-3" />
+                            <span>{author.name}</span>
+                            {author.count > 0 && (
+                              <span className="ml-1 text-amber-500 font-medium">
+                                {author.count}
+                              </span>
+                            )}
+                          </motion.button>
+                        ))}
+                      </div>
                     ) : (
                       <div className="text-sm text-zinc-500 dark:text-zinc-400 p-2">
                         Nessun autore disponibile
                       </div>
                     )}
                   </div>
+                  
+                  {selectedAuthors.length > 0 && (
+                    <motion.button
+                      onClick={() => setSelectedAuthors([])}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.5, delay: 0.3 }}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      className="mt-4 text-sm font-medium px-4 py-2 rounded-lg
+                        text-zinc-500 dark:text-zinc-400 hover:text-blue-500 dark:hover:text-blue-400 
+                        transition-all duration-300 hover:bg-white/10 dark:hover:bg-zinc-700/50
+                        bg-white/5 dark:bg-zinc-800/50 flex items-center justify-center gap-2"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      Rimuovi filtri autore
+                    </motion.button>
+                  )}
                 </div>
-                
-                {selectedAuthors.length > 0 && (
-                  <motion.button
-                    onClick={() => setSelectedAuthors([])}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: 0.3 }}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    className="mt-4 text-sm font-medium px-4 py-2 rounded-lg
-                      text-zinc-500 dark:text-zinc-400 hover:text-blue-500 dark:hover:text-blue-400 
-                      transition-all duration-300 hover:bg-white/10 dark:hover:bg-zinc-700/50
-                      bg-white/5 dark:bg-zinc-800/50 flex items-center justify-center gap-2"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                    Rimuovi filtri autore
-                  </motion.button>
-                )}
               </div>
-            </div>
-          </motion.div>
-        )}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {loading ? (
           // Stato di caricamento animato con skeleton per articoli
@@ -839,7 +929,7 @@ export default function Articles() {
                         {article.titolo}
                       </h2>
 
-                      {/* Excerpt con font ottimizzato per la lettura */}
+                      {/* Excerpt with optimized font for reading */}
                       <p className="font-['Inter'] text-sm leading-relaxed text-zinc-600 dark:text-zinc-400 mb-4 line-clamp-2 sm:line-clamp-3">
                         {getExcerpt(article.contenuto)}
                       </p>
@@ -854,7 +944,7 @@ export default function Articles() {
                           </span>
                         </div>
 
-                        {/* Metriche */}
+                        {/* Metrics */}
                         <div className="flex items-center gap-4 text-sm">
                           <motion.span 
                             whileHover={{ scale: 1.2 }}

@@ -539,6 +539,9 @@ export default function ManageArticlesPage() {
         snapshot.forEach((childSnapshot) => {
           authorsData.push(childSnapshot.val().name);
         });
+        
+        // Ordina gli autori alfabeticamente
+        authorsData.sort((a, b) => a.localeCompare(b, 'it', { sensitivity: 'base' }));
         setAuthors(authorsData);
       }
     } catch (error) {
@@ -796,7 +799,7 @@ export default function ManageArticlesPage() {
             </div>
 
             <div className="space-y-6">
-              {/* Title input with character limit */}
+              {/* Titolo */}
               <div className="mb-4">
                 <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
                   Titolo * <span className="text-xs text-zinc-500">(max 100 caratteri)</span>
@@ -819,6 +822,267 @@ export default function ManageArticlesPage() {
                     {editFormData.titolo.length}/100
                   </div>
                 </div>
+              </div>
+
+              {/* Autore */}
+              <div className="mb-4 relative" ref={authorDropdownRef}>
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">Autore *</label>
+                <div className="relative">
+                  <div 
+                    className="flex items-center w-full p-3 bg-white/5 border border-white/20 rounded-xl focus-within:ring-2 focus-within:ring-blue-500/50 focus-within:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none cursor-pointer"
+                    onClick={() => setShowAuthorDropdown(!showAuthorDropdown)}
+                  >
+                    <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-zinc-500">
+                      <FiUser className="h-5 w-5" />
+                    </div>
+                    <div className="pl-10 flex-grow truncate">
+                      {editFormData.autore || "Seleziona un autore"}
+                    </div>
+                    <FiChevronDown className={`h-4 w-4 text-zinc-500 transition-transform duration-300 ${showAuthorDropdown ? 'rotate-180' : ''}`} />
+                  </div>
+                  
+                  {/* Dropdown for author selection */}
+                  {showAuthorDropdown && (
+                    <div className="absolute z-10 mt-1 w-full bg-white dark:bg-zinc-800 rounded-xl shadow-lg border border-zinc-200 dark:border-zinc-700 py-1 max-h-60 overflow-auto animate-fade-in">
+                      {authors.length > 0 ? (
+                        authors.map((authorName, index) => (
+                          <div 
+                            key={index}
+                            className={`flex items-center px-3 py-2 cursor-pointer hover:bg-blue-500/10 ${
+                              editFormData.autore === authorName ? 'bg-blue-500/20' : ''
+                            }`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSelectAuthor(authorName);
+                            }}
+                          >
+                            <div className={`flex-shrink-0 h-4 w-4 mr-2 rounded ${
+                              editFormData.autore === authorName ? 'bg-blue-500 flex items-center justify-center' : ''
+                            }`}>
+                              {editFormData.autore === authorName && (
+                                <FiCheck className="h-3 w-3 text-white" />
+                              )}
+                            </div>
+                            <span className="text-sm text-zinc-800 dark:text-zinc-200">{authorName}</span>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="px-3 py-2 text-sm text-zinc-500 dark:text-zinc-400">
+                          Nessun autore disponibile
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Tag */}
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+                  Categorie <span className="text-xs text-zinc-500">({editFormData.tag.split(',').filter(t => t.trim()).length}/3)</span>
+                </label>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 p-4 bg-white/5 border border-white/20 rounded-xl">
+                  {availableCategories.map((category) => {
+                    const isSelected = editFormData.tag
+                      .split(',')
+                      .map(tag => tag.trim())
+                      .includes(category);
+                    
+                    return (
+                      <div 
+                        key={category}
+                        onClick={() => handleTagChange(category)}
+                        className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors ${
+                          isSelected 
+                            ? 'bg-blue-500/20 border border-blue-500/30' 
+                            : 'bg-white/5 border border-white/10 hover:bg-white/10'
+                        }`}
+                      >
+                        <div className={`flex-shrink-0 h-4 w-4 rounded border ${
+                          isSelected 
+                            ? 'bg-blue-500 border-blue-500 flex items-center justify-center' 
+                            : 'border-zinc-300 dark:border-zinc-600'
+                        }`}>
+                          {isSelected && (
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </div>
+                        <span className="text-sm text-zinc-800 dark:text-zinc-200">
+                          {category}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="mt-1 text-xs text-zinc-500">Puoi selezionare massimo 3 categorie</p>
+              </div>
+
+              {/* Partecipanti */}
+              <div className="mb-4 relative" ref={participantsDropdownRef}>
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">Partecipanti</label>
+                <div className="relative">
+                  <div 
+                    className="flex items-center w-full p-3 bg-white/5 border border-white/20 rounded-xl focus-within:ring-2 focus-within:ring-blue-500/50 focus-within:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none cursor-pointer"
+                    onClick={() => setShowParticipantsDropdown(!showParticipantsDropdown)}
+                  >
+                    <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-zinc-500">
+                      <FiUsers className="h-5 w-5" />
+                    </div>
+                    <div className="pl-10 flex-grow truncate">
+                      {participants.length > 0 
+                        ? participants.join(", ") 
+                        : "Aggiungi partecipanti all'articolo"}
+                    </div>
+                    <FiChevronDown className={`h-4 w-4 text-zinc-500 transition-transform duration-300 ${showParticipantsDropdown ? 'rotate-180' : ''}`} />
+                  </div>
+                  
+                  {/* Dropdown for participant management */}
+                  {showParticipantsDropdown && (
+                    <div className="absolute z-10 mt-1 w-full bg-white dark:bg-zinc-800 rounded-xl shadow-lg border border-zinc-200 dark:border-zinc-700 py-1 max-h-60 overflow-auto animate-fade-in">
+                      {/* Form to add new participants */}
+                      <div className="p-2 border-b border-zinc-200 dark:border-zinc-700">
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={newParticipant}
+                            onChange={(e) => setNewParticipant(e.target.value)}
+                            placeholder="Nome del partecipante"
+                            className="flex-1 p-2 bg-white/5 border border-white/20 rounded-lg focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleAddParticipant();
+                              }
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            autoFocus
+                          />
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAddParticipant();
+                            }}
+                            className="cursor-pointer px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+                          >
+                            <FiPlus className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                      
+                      {/* List of added participants */}
+                      <div className="py-1">
+                        {participants.length > 0 ? (
+                          participants.map((participant, index) => (
+                            <div 
+                              key={index}
+                              className="flex items-center justify-between px-3 py-2 hover:bg-zinc-100 dark:hover:bg-zinc-700/50"
+                            >
+                              <span className="text-sm text-zinc-800 dark:text-zinc-200">{participant}</span>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRemoveParticipant(participant);
+                                }}
+                                className="text-zinc-400 hover:text-red-500 transition-colors p-1 cursor-pointer"
+                                title="Rimuovi partecipante"
+                              >
+                                <FiTrash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="px-3 py-2 text-sm text-zinc-500 dark:text-zinc-400">
+                            Nessun partecipante aggiunto
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Visibilità */}
+              <div className="flex items-center justify-between p-4 bg-white/5 dark:bg-zinc-800/20 rounded-xl border border-white/10 dark:border-zinc-700/50">
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
+                    Visibilità articolo
+                  </span>
+                  <span className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                    {editFormData.isPrivate 
+                      ? "Solo gli utenti registrati potranno vedere questo articolo" 
+                      : "L'articolo sarà visibile a tutti"}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditFormData({...editFormData, isPrivate: !editFormData.isPrivate})}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 cursor-pointer focus:outline-none
+                    ${editFormData.isPrivate 
+                      ? 'bg-amber-500' 
+                      : 'bg-zinc-300 dark:bg-zinc-600'}`}
+                >
+                  <span className="sr-only">
+                    Toggle article visibility
+                  </span>
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300
+                      ${editFormData.isPrivate ? 'translate-x-6' : 'translate-x-1'}`}
+                  />
+                </button>
+              </div>
+
+              {/* Contenuto */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+                  Contenuto *
+                </label>
+                
+                {/* Editor come textarea */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+                      Modifica HTML
+                    </label>
+                    <textarea
+                      id="article-content-textarea"
+                      value={editFormData.contenuto}
+                      onChange={handleContentChange}
+                      className="min-h-[300px] w-full p-4 bg-white/5 border border-white/20 rounded-xl 
+                                focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 
+                                transition-all duration-300 text-zinc-900 dark:text-zinc-50 
+                                outline-none font-mono text-sm overflow-auto"
+                      placeholder="Inserisci il contenuto HTML del tuo articolo..."
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+                      Anteprima
+                    </label>
+                    <div 
+                      className="h-[300px] w-full p-4 bg-white/10 border border-white/20 rounded-xl
+                                overflow-y-auto prose prose-zinc dark:prose-invert max-w-none
+                                [&>p]:mb-4 [&>p]:leading-relaxed [&>p]:tracking-wide
+                                [&_a]:text-amber-500 [&_a]:no-underline [&_a]:cursor-pointer
+                                [&_a:hover]:text-amber-600 
+                                dark:[&_a]:text-amber-500 
+                                dark:[&_a:hover]:text-amber-600
+                                [&_a]:transition-colors [&_a]:duration-200
+                                [&_[style*='background-color: #fb923c']]:text-zinc-900"
+                      style={{ 
+                        scrollbarWidth: 'thin',
+                        scrollbarColor: 'rgba(161, 161, 170, 0.5) transparent'
+                      }}
+                      dangerouslySetInnerHTML={{ __html: editFormData.contenuto }}
+                    />
+                  </div>
+                </div>
+                
+                <p className="mt-2 text-xs text-zinc-500">
+                  Modifica direttamente il codice HTML nella casella a sinistra. L&apos;anteprima mostra come apparirà l&apos;articolo.
+                </p>
               </div>
 
               {/* Note secondarie */}
@@ -925,58 +1189,6 @@ export default function ManageArticlesPage() {
                 </div>
               </div>
 
-              {/* Barra degli strumenti e Editor */}
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
-                  Contenuto *
-                </label>
-                
-                {/* Editor come textarea */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
-                      Modifica HTML
-                    </label>
-                    <textarea
-                      id="article-content-textarea"
-                      value={editFormData.contenuto}
-                      onChange={handleContentChange}
-                      className="min-h-[300px] w-full p-4 bg-white/5 border border-white/20 rounded-xl 
-                                focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 
-                                transition-all duration-300 text-zinc-900 dark:text-zinc-50 
-                                outline-none font-mono text-sm overflow-auto"
-                      placeholder="Inserisci il contenuto HTML del tuo articolo..."
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
-                      Anteprima
-                    </label>
-                    <div 
-                      className="h-[300px] w-full p-4 bg-white/10 border border-white/20 rounded-xl
-                                overflow-y-auto prose prose-zinc dark:prose-invert max-w-none
-                                [&>p]:mb-4 [&>p]:leading-relaxed [&>p]:tracking-wide
-                                [&_a]:text-amber-500 [&_a]:no-underline [&_a]:cursor-pointer
-                                [&_a:hover]:text-amber-600 
-                                dark:[&_a]:text-amber-500 
-                                dark:[&_a:hover]:text-amber-600
-                                [&_a]:transition-colors [&_a]:duration-200
-                                [&_[style*='background-color: #fb923c']]:text-zinc-900"
-                      style={{ 
-                        scrollbarWidth: 'thin',
-                        scrollbarColor: 'rgba(161, 161, 170, 0.5) transparent'
-                      }}
-                      dangerouslySetInnerHTML={{ __html: editFormData.contenuto }}
-                    />
-                  </div>
-                </div>
-                
-                <p className="mt-2 text-xs text-zinc-500">
-                  Modifica direttamente il codice HTML nella casella a sinistra. L&apos;anteprima mostra come apparirà l&apos;articolo.
-                </p>
-              </div>
-
               {/* Immagine */}
               <div>
                 <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
@@ -998,218 +1210,6 @@ export default function ManageArticlesPage() {
                     className="flex-1 p-3 bg-white/5 border border-white/20 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
                   />
                 </div>
-              </div>
-
-              {/* Autore e Partecipanti */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Author as dropdown - simplified */}
-                <div className="mb-4 relative" ref={authorDropdownRef}>
-                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">Autore *</label>
-                  <div className="relative">
-                    <div 
-                      className="flex items-center w-full p-3 bg-white/5 border border-white/20 rounded-xl focus-within:ring-2 focus-within:ring-blue-500/50 focus-within:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none cursor-pointer"
-                      onClick={() => setShowAuthorDropdown(!showAuthorDropdown)}
-                    >
-                      <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-zinc-500">
-                        <FiUser className="h-5 w-5" />
-                      </div>
-                      <div className="pl-10 flex-grow truncate">
-                        {editFormData.autore || "Seleziona un autore"}
-                      </div>
-                      <FiChevronDown className={`h-4 w-4 text-zinc-500 transition-transform duration-300 ${showAuthorDropdown ? 'rotate-180' : ''}`} />
-                    </div>
-                    
-                    {/* Dropdown for author selection - simplified */}
-                    {showAuthorDropdown && (
-                      <div className="absolute z-10 mt-1 w-full bg-white dark:bg-zinc-800 rounded-xl shadow-lg border border-zinc-200 dark:border-zinc-700 py-1 max-h-60 overflow-auto animate-fade-in">
-                        {authors.length > 0 ? (
-                          authors.map((authorName, index) => (
-                            <div 
-                              key={index}
-                              className={`flex items-center px-3 py-2 cursor-pointer hover:bg-blue-500/10 ${
-                                editFormData.autore === authorName ? 'bg-blue-500/20' : ''
-                              }`}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleSelectAuthor(authorName);
-                              }}
-                            >
-                              <div className={`flex-shrink-0 h-4 w-4 mr-2 rounded ${
-                                editFormData.autore === authorName ? 'bg-blue-500 flex items-center justify-center' : ''
-                              }`}>
-                                {editFormData.autore === authorName && (
-                                  <FiCheck className="h-3 w-3 text-white" />
-                                )}
-                              </div>
-                              <span className="text-sm text-zinc-800 dark:text-zinc-200">{authorName}</span>
-                            </div>
-                          ))
-                        ) : (
-                          <div className="px-3 py-2 text-sm text-zinc-500 dark:text-zinc-400">
-                            Nessun autore disponibile
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Participants dropdown */}
-                <div className="mb-4 relative" ref={participantsDropdownRef}>
-                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">Partecipanti</label>
-                  <div className="relative">
-                    <div 
-                      className="flex items-center w-full p-3 bg-white/5 border border-white/20 rounded-xl focus-within:ring-2 focus-within:ring-blue-500/50 focus-within:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none cursor-pointer"
-                      onClick={() => setShowParticipantsDropdown(!showParticipantsDropdown)}
-                    >
-                      <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-zinc-500">
-                        <FiUsers className="h-5 w-5" />
-                      </div>
-                      <div className="pl-10 flex-grow truncate">
-                        {participants.length > 0 
-                          ? participants.join(", ") 
-                          : "Aggiungi partecipanti all'articolo"}
-                      </div>
-                      <FiChevronDown className={`h-4 w-4 text-zinc-500 transition-transform duration-300 ${showParticipantsDropdown ? 'rotate-180' : ''}`} />
-                    </div>
-                    
-                    {/* Dropdown for participant management */}
-                    {showParticipantsDropdown && (
-                      <div className="absolute z-10 mt-1 w-full bg-white dark:bg-zinc-800 rounded-xl shadow-lg border border-zinc-200 dark:border-zinc-700 py-1 max-h-60 overflow-auto animate-fade-in">
-                        {/* Form to add new participants */}
-                        <div className="p-2 border-b border-zinc-200 dark:border-zinc-700">
-                          <div className="flex gap-2">
-                            <input
-                              type="text"
-                              value={newParticipant}
-                              onChange={(e) => setNewParticipant(e.target.value)}
-                              placeholder="Nome del partecipante"
-                              className="flex-1 p-2 bg-white/5 border border-white/20 rounded-lg focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault();
-                                  handleAddParticipant();
-                                }
-                              }}
-                              onClick={(e) => e.stopPropagation()}
-                              autoFocus
-                            />
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleAddParticipant();
-                              }}
-                              className="cursor-pointer px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
-                            >
-                              <FiPlus className="h-4 w-4" />
-                            </button>
-                          </div>
-                        </div>
-                        
-                        {/* List of added participants */}
-                        <div className="py-1">
-                          {participants.length > 0 ? (
-                            participants.map((participant, index) => (
-                              <div 
-                                key={index}
-                                className="flex items-center justify-between px-3 py-2 hover:bg-zinc-100 dark:hover:bg-zinc-700/50"
-                              >
-                                <span className="text-sm text-zinc-800 dark:text-zinc-200">{participant}</span>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleRemoveParticipant(participant);
-                                  }}
-                                  className="text-zinc-400 hover:text-red-500 transition-colors p-1"
-                                  title="Rimuovi partecipante"
-                                >
-                                  <FiTrash2 className="h-4 w-4" />
-                                </button>
-                              </div>
-                            ))
-                          ) : (
-                            <div className="px-3 py-2 text-sm text-zinc-500 dark:text-zinc-400">
-                              Nessun partecipante aggiunto
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Tags */}
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
-                  Categorie <span className="text-xs text-zinc-500">({editFormData.tag.split(',').filter(t => t.trim()).length}/3)</span>
-                </label>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 p-4 bg-white/5 border border-white/20 rounded-xl">
-                  {availableCategories.map((category) => {
-                    const isSelected = editFormData.tag
-                      .split(',')
-                      .map(tag => tag.trim())
-                      .includes(category);
-                    
-                    return (
-                      <div 
-                        key={category}
-                        onClick={() => handleTagChange(category)}
-                        className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors ${
-                          isSelected 
-                            ? 'bg-blue-500/20 border border-blue-500/30' 
-                            : 'bg-white/5 border border-white/10 hover:bg-white/10'
-                        }`}
-                      >
-                        <div className={`flex-shrink-0 h-4 w-4 rounded border ${
-                          isSelected 
-                            ? 'bg-blue-500 border-blue-500 flex items-center justify-center' 
-                            : 'border-zinc-300 dark:border-zinc-600'
-                        }`}>
-                          {isSelected && (
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                            </svg>
-                          )}
-                        </div>
-                        <span className="text-sm text-zinc-800 dark:text-zinc-200">
-                          {category}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-                <p className="mt-1 text-xs text-zinc-500">Puoi selezionare massimo 3 categorie</p>
-              </div>
-
-              {/* Visibilità */}
-              <div className="flex items-center justify-between p-4 bg-white/5 dark:bg-zinc-800/20 rounded-xl border border-white/10 dark:border-zinc-700/50">
-                <div className="flex flex-col">
-                  <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
-                    Visibilità articolo
-                  </span>
-                  <span className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                    {editFormData.isPrivate 
-                      ? "Solo gli utenti registrati potranno vedere questo articolo" 
-                      : "L'articolo sarà visibile a tutti"}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setEditFormData({...editFormData, isPrivate: !editFormData.isPrivate})}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 cursor-pointer focus:outline-none
-                    ${editFormData.isPrivate 
-                      ? 'bg-amber-500' 
-                      : 'bg-zinc-300 dark:bg-zinc-600'}`}
-                >
-                  <span className="sr-only">
-                    Toggle article visibility
-                  </span>
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300
-                      ${editFormData.isPrivate ? 'translate-x-6' : 'translate-x-1'}`}
-                  />
-                </button>
               </div>
 
               <div className="flex justify-end gap-4 mt-6">

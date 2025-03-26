@@ -144,13 +144,20 @@ export default function NewArticlePage() {
               snapshot.forEach((childSnapshot) => {
                 authorsData.push(childSnapshot.val().name);
               });
+              
+              // Ordina gli autori alfabeticamente
+              authorsData.sort((a, b) => a.localeCompare(b, 'it', { sensitivity: 'base' }));
               setAuthors(authorsData);
               
               // If user's name is not in the authors list, add it automatically
               if (userName && !authorsData.includes(userName)) {
                 const newAuthorRef = push(authorsRef);
                 await set(newAuthorRef, { name: userName });
-                setAuthors([...authorsData, userName]);
+                // Aggiungi il nuovo autore e riordina l'array
+                const updatedAuthors = [...authorsData, userName].sort((a, b) => 
+                  a.localeCompare(b, 'it', { sensitivity: 'base' })
+                );
+                setAuthors(updatedAuthors);
                 showNotification("success", "Autore aggiunto automaticamente");
               }
             } else {
@@ -808,7 +815,7 @@ export default function NewArticlePage() {
                             e.stopPropagation();
                             handleDeleteAuthor(author);
                           }}
-                          className="text-zinc-400 hover:text-red-500 transition-colors p-1"
+                          className="text-zinc-400 hover:text-red-500 transition-colors p-1 cursor-pointer"
                           title="Elimina autore"
                         >
                           <FiTrash2 className="h-4 w-4" />
@@ -960,7 +967,7 @@ export default function NewArticlePage() {
                                 e.stopPropagation();
                                 handleRemoveParticipant(participant);
                               }}
-                              className="text-zinc-400 hover:text-red-500 transition-colors p-1"
+                              className="text-zinc-400 hover:text-red-500 transition-colors p-1 cursor-pointer"
                               title="Rimuovi partecipante"
                             >
                               <FiTrash2 className="h-4 w-4" />
@@ -1208,7 +1215,58 @@ export default function NewArticlePage() {
               </div>
             </div>
 
-            {/* Caricamento immagine */}
+            {/* Link aggiuntivi */}
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+                Link aggiuntivi
+              </label>
+              <div className="space-y-4">
+                {/* Form per aggiungere nuovi link */}
+                <div className="flex gap-4">
+                  <input
+                    type="text"
+                    value={newLinkLabel}
+                    onChange={(e) => setNewLinkLabel(e.target.value)}
+                    placeholder="Etichetta del link"
+                    className="flex-1 p-2 bg-white/5 border border-white/20 rounded-lg focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
+                  />
+                  <input
+                    type="url"
+                    value={newLinkUrl}
+                    onChange={(e) => setNewLinkUrl(e.target.value)}
+                    placeholder="URL"
+                    className="flex-1 p-2 bg-white/5 border border-white/20 rounded-lg focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
+                  />
+                  <button
+                    onClick={handleAddLink}
+                    className="cursor-pointer px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
+                  >
+                    Aggiungi Link
+                  </button>
+                </div>
+
+                {/* Lista dei link aggiunti */}
+                {additionalLinks.length > 0 && (
+                  <div className="flex flex-wrap gap-2 p-4 bg-white/5 border border-white/20 rounded-lg">
+                    {additionalLinks.map((link, index) => (
+                      <div key={index} className="flex items-center gap-2 bg-amber-500/10 text-amber-600 dark:text-amber-400 px-3 py-1.5 rounded-full">
+                        <span>{link.label}</span>
+                        <button
+                          onClick={() => {
+                            setAdditionalLinks(additionalLinks.filter((_, i) => i !== index));
+                          }}
+                          className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300"
+                        >
+                          <FiX className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Caricamento immagine - SPOSTATO QUI */}
             <div className="md:col-span-2 relative">
               <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">Immagine *</label>
               <div className="relative">
@@ -1284,57 +1342,6 @@ export default function NewArticlePage() {
                     </div>
                   )}
                 </div>
-              </div>
-            </div>
-
-            {/* Link aggiuntivi */}
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
-                Link aggiuntivi
-              </label>
-              <div className="space-y-4">
-                {/* Form per aggiungere nuovi link */}
-                <div className="flex gap-4">
-                  <input
-                    type="text"
-                    value={newLinkLabel}
-                    onChange={(e) => setNewLinkLabel(e.target.value)}
-                    placeholder="Etichetta del link"
-                    className="flex-1 p-2 bg-white/5 border border-white/20 rounded-lg focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
-                  />
-                  <input
-                    type="url"
-                    value={newLinkUrl}
-                    onChange={(e) => setNewLinkUrl(e.target.value)}
-                    placeholder="URL"
-                    className="flex-1 p-2 bg-white/5 border border-white/20 rounded-lg focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
-                  />
-                  <button
-                    onClick={handleAddLink}
-                    className="cursor-pointer px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
-                  >
-                    Aggiungi Link
-                  </button>
-                </div>
-
-                {/* Lista dei link aggiunti */}
-                {additionalLinks.length > 0 && (
-                  <div className="flex flex-wrap gap-2 p-4 bg-white/5 border border-white/20 rounded-lg">
-                    {additionalLinks.map((link, index) => (
-                      <div key={index} className="flex items-center gap-2 bg-amber-500/10 text-amber-600 dark:text-amber-400 px-3 py-1.5 rounded-full">
-                        <span>{link.label}</span>
-                        <button
-                          onClick={() => {
-                            setAdditionalLinks(additionalLinks.filter((_, i) => i !== index));
-                          }}
-                          className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300"
-                        >
-                          <FiX className="h-4 w-4" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
             </div>
           </div>
