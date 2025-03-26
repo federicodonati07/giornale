@@ -4,10 +4,10 @@ import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { v4 as uuidv4 } from "uuid"
-import { FiArrowLeft, FiSave, FiTag, FiUser, FiUsers, FiCalendar, FiCheck, FiX, FiUpload } from "react-icons/fi"
+import { FiArrowLeft, FiSave, FiTag, FiUser, FiUsers, FiCalendar, FiCheck, FiX, FiUpload, FiChevronDown, FiPlus, FiTrash2 } from "react-icons/fi"
 import { Button } from "@heroui/react"
 import { onAuthStateChanged } from "firebase/auth"
-import { ref as dbRef, set } from "firebase/database"
+import { ref as dbRef, set, get, push } from "firebase/database"
 import { ref as storageRef, uploadBytesResumable, getDownloadURL } from "firebase/storage"
 import { auth, db, storage } from "../../firebase"
 import { motion, useScroll, useTransform } from "framer-motion"
@@ -99,9 +99,22 @@ export default function NewArticlePage() {
   const [newNoteContent, setNewNoteContent] = useState('');
   const [overallProgress, setOverallProgress] = useState(0);
 
+  // Add these new states below the existing ones
+  const [authors, setAuthors] = useState<string[]>([]);
+  const [showAuthorDropdown, setShowAuthorDropdown] = useState(false);
+  const [newAuthor, setNewAuthor] = useState("");
+  const [isAddingAuthor, setIsAddingAuthor] = useState(false);
+  const authorDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Add these new states for participants
+  const [participants, setParticipants] = useState<string[]>([]);
+  const [newParticipant, setNewParticipant] = useState('');
+  const [showParticipantsDropdown, setShowParticipantsDropdown] = useState(false);
+  const participantsDropdownRef = useRef<HTMLDivElement>(null);
+
   // Verifica se l'utente è autorizzato
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       const adminEmails = JSON.parse(process.env.NEXT_PUBLIC_ADMIN_EMAILS || "[]")
       const superiorEmails = JSON.parse(process.env.NEXT_PUBLIC_SUPERIOR_EMAILS || "[]")
       
@@ -116,7 +129,42 @@ export default function NewArticlePage() {
         // Verifica se l'utente è admin o superior
         if (adminEmails.includes(user.email || '') || superiorEmails.includes(user.email || '')) {
           setIsAdmin(true)
-          setAutore(user.displayName || user.email || '')
+          
+          // Set user's name as author
+          const userName = user.displayName || user.email || '';
+          setAutore(userName);
+          
+          // Fetch authors first
+          try {
+            const authorsRef = dbRef(db, 'autori');
+            const snapshot = await get(authorsRef);
+            
+            if (snapshot.exists()) {
+              const authorsData: string[] = [];
+              snapshot.forEach((childSnapshot) => {
+                authorsData.push(childSnapshot.val().name);
+              });
+              setAuthors(authorsData);
+              
+              // If user's name is not in the authors list, add it automatically
+              if (userName && !authorsData.includes(userName)) {
+                const newAuthorRef = push(authorsRef);
+                await set(newAuthorRef, { name: userName });
+                setAuthors([...authorsData, userName]);
+                showNotification("success", "Autore aggiunto automaticamente");
+              }
+            } else {
+              // If no authors exist yet, create one for the current user
+              if (userName) {
+                const newAuthorRef = push(authorsRef);
+                await set(newAuthorRef, { name: userName });
+                setAuthors([userName]);
+                showNotification("success", "Autore aggiunto automaticamente");
+              }
+            }
+          } catch (error) {
+            console.error("Errore nel recupero/aggiunta degli autori:", error);
+          }
         } else {
           router.push('/')
         }
@@ -262,7 +310,7 @@ export default function NewArticlePage() {
         contenuto,
         immagine: imageUrl,
         tag: selectedTags.join(", "),
-        partecipanti,
+        partecipanti: participants.join(", "),
         additionalLinks,
         secondaryNotes,
         uuid: articleUuid,
@@ -297,17 +345,22 @@ export default function NewArticlePage() {
 
   // Gestione dei tag
   const toggleTag = (tag: string) => {
-    // Converti il tag in maiuscolo
+    // Convert tag to uppercase
     const upperCaseTag = tag.toUpperCase();
     
     if (selectedTags.includes(upperCaseTag)) {
-      // Impedisci la rimozione se è l'ultimo tag rimasto
+      // Prevent removal if it's the last tag
       if (selectedTags.length <= 1) {
         showNotification("error", "È necessario selezionare almeno un tag");
         return;
       }
       setSelectedTags(selectedTags.filter(t => t !== upperCaseTag));
     } else {
+      // Prevent adding more than 3 tags
+      if (selectedTags.length >= 3) {
+        showNotification("error", "Non puoi selezionare più di 3 tag");
+        return;
+      }
       setSelectedTags([...selectedTags, upperCaseTag]);
     }
   }
@@ -470,6 +523,123 @@ export default function NewArticlePage() {
     }
   };
 
+  // Add this function to delete an author
+  const handleDeleteAuthor = async (authorToDelete: string) => {
+    try {
+      // Find the author key in Firebase
+      const authorsRef = dbRef(db, 'autori');
+      const snapshot = await get(authorsRef);
+      
+      if (snapshot.exists()) {
+        let authorKeyToDelete = null;
+        
+        snapshot.forEach((childSnapshot) => {
+          if (childSnapshot.val().name === authorToDelete) {
+            authorKeyToDelete = childSnapshot.key;
+          }
+        });
+        
+        if (authorKeyToDelete) {
+          // Delete the author from Firebase
+          await set(dbRef(db, `autori/${authorKeyToDelete}`), null);
+          
+          // Update the local state
+          setAuthors(authors.filter(author => author !== authorToDelete));
+          
+          // If the deleted author was selected, clear the selection
+          if (autore === authorToDelete) {
+            setAutore("");
+          }
+          
+          showNotification("success", "Autore eliminato con successo");
+        }
+      }
+    } catch (error) {
+      console.error("Errore nell'eliminazione dell'autore:", error);
+      showNotification("error", "Errore nell'eliminazione dell'autore");
+    }
+  };
+
+  // Add this function to handle author selection
+  const handleSelectAuthor = (selectedAuthor: string) => {
+    setAutore(selectedAuthor);
+    setShowAuthorDropdown(false);
+  };
+
+  // Add this function to handle adding a new author
+  const handleAddNewAuthor = async () => {
+    if (!newAuthor.trim()) {
+      showNotification("error", "Il nome dell'autore non può essere vuoto");
+      return;
+    }
+    
+    try {
+      const authorsRef = dbRef(db, 'autori');
+      const newAuthorRef = push(authorsRef);
+      await set(newAuthorRef, { name: newAuthor.trim() });
+      
+      setAuthors([...authors, newAuthor.trim()]);
+      setAutore(newAuthor.trim());
+      setNewAuthor("");
+      setIsAddingAuthor(false);
+      setShowAuthorDropdown(false);
+      
+      showNotification("success", "Nuovo autore aggiunto");
+    } catch (error) {
+      console.error("Errore nell'aggiunta dell'autore:", error);
+      showNotification("error", "Errore nell'aggiunta dell'autore");
+    }
+  };
+
+  // Add click outside handler for author dropdown
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (authorDropdownRef.current && !authorDropdownRef.current.contains(event.target as Node)) {
+        setShowAuthorDropdown(false);
+      }
+    }
+    
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  // Add this useEffect for handling clicks outside the participants dropdown
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (participantsDropdownRef.current && !participantsDropdownRef.current.contains(event.target as Node)) {
+        setShowParticipantsDropdown(false);
+      }
+    }
+    
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  // Add this function to handle adding participants
+  const handleAddParticipant = () => {
+    if (!newParticipant.trim()) {
+      showNotification("error", "Il nome del partecipante non può essere vuoto");
+      return;
+    }
+    
+    if (participants.includes(newParticipant.trim())) {
+      showNotification("error", "Questo partecipante è già stato aggiunto");
+      return;
+    }
+    
+    setParticipants([...participants, newParticipant.trim()]);
+    setNewParticipant('');
+  };
+
+  // Add this function to handle removing participants
+  const handleRemoveParticipant = (participantToRemove: string) => {
+    setParticipants(participants.filter(p => p !== participantToRemove));
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-zinc-100 to-zinc-200/90 dark:from-zinc-900 dark:to-zinc-800">
@@ -527,49 +697,149 @@ export default function NewArticlePage() {
           className="backdrop-blur-xl bg-white/15 dark:bg-zinc-800/20 border border-white/30 dark:border-white/10 rounded-2xl shadow-2xl p-8 transition-all duration-500 hover:shadow-[0_20px_60px_-15px_rgba(0,0,0,0.3)] dark:hover:shadow-[0_20px_60px_-15px_rgba(255,255,255,0.1)]"
         >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Titolo */}
+            {/* Titolo - with 100 character limit */}
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">Titolo *</label>
-              <input
-                type="text"
-                value={titolo}
-                onChange={(e) => setTitolo(e.target.value)}
-                className="w-full p-4 bg-white/5 border border-white/20 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
-                placeholder="Inserisci il titolo dell'articolo"
-                required
-              />
-            </div>
-            
-            {/* Autore */}
-            <div className="relative">
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">Autore *</label>
+              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+                Titolo * <span className="text-xs text-zinc-500">(max 100 caratteri)</span>
+              </label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-zinc-500">
-                  <FiUser className="h-5 w-5" />
-                </div>
                 <input
                   type="text"
-                  value={autore}
-                  onChange={(e) => setAutore(e.target.value)}
-                  className="w-full pl-10 p-4 bg-white/5 border border-white/20 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
-                  placeholder="Nome dell'autore"
+                  value={titolo}
+                  onChange={(e) => {
+                    // Limit to 100 characters
+                    if (e.target.value.length <= 100) {
+                      setTitolo(e.target.value);
+                    }
+                  }}
+                  maxLength={100}
+                  className="w-full p-4 bg-white/5 border border-white/20 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
+                  placeholder="Inserisci il titolo dell'articolo"
                   required
                 />
+                <div className="absolute right-3 bottom-3 text-xs text-zinc-500">
+                  {titolo.length}/100
+                </div>
               </div>
             </div>
             
-            {/* Tag - Selezione multipla */}
-            <div className="relative" ref={tagDropdownRef}>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">Tag</label>
+            {/* Autore - as a dropdown with option to add new */}
+            <div className="relative" ref={authorDropdownRef}>
+              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">Autore *</label>
               <div className="relative">
                 <div 
-                  className="flex items-center flex-wrap w-full p-3 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus-within:ring-2 focus-within:ring-blue-500/50 focus-within:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none cursor-pointer min-h-[56px]"
+                  className="flex items-center w-full p-3 bg-white/5 border border-white/20 rounded-xl focus-within:ring-2 focus-within:ring-blue-500/50 focus-within:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none cursor-pointer"
+                  onClick={() => setShowAuthorDropdown(!showAuthorDropdown)}
+                >
+                  <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-zinc-500">
+                    <FiUser className="h-5 w-5" />
+                  </div>
+                  <div className="pl-10 flex-grow truncate">
+                    {autore || "Seleziona un autore"}
+                  </div>
+                  <FiChevronDown className={`h-4 w-4 text-zinc-500 transition-transform duration-300 ${showAuthorDropdown ? 'rotate-180' : ''}`} />
+                </div>
+                
+                {/* Dropdown for author selection */}
+                {showAuthorDropdown && (
+                  <div className="absolute z-10 mt-1 w-full bg-white dark:bg-zinc-800 rounded-xl shadow-lg border border-zinc-200 dark:border-zinc-700 py-1 max-h-60 overflow-auto animate-fade-in">
+                    {/* Option to add new author */}
+                    {isAddingAuthor ? (
+                      <div className="p-2">
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={newAuthor}
+                            onChange={(e) => setNewAuthor(e.target.value)}
+                            placeholder="Nome del nuovo autore"
+                            className="flex-1 p-2 bg-white/5 border border-white/20 rounded-lg focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
+                            autoFocus
+                          />
+                          <button
+                            onClick={handleAddNewAuthor}
+                            className="cursor-pointer px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+                          >
+                            <FiCheck className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => setIsAddingAuthor(false)}
+                            className="cursor-pointer px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                          >
+                            <FiX className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div 
+                        className="flex items-center px-3 py-2 cursor-pointer hover:bg-green-500/10 text-green-600 dark:text-green-400"
+                        onClick={() => setIsAddingAuthor(true)}
+                      >
+                        <div className="flex-shrink-0 h-4 w-4 mr-2 flex items-center justify-center">
+                          <FiPlus className="h-4 w-4" />
+                        </div>
+                        <span className="text-sm">Aggiungi nuovo autore</span>
+                      </div>
+                    )}
+                    
+                    {/* Divider */}
+                    {authors.length > 0 && (
+                      <div className="border-t border-zinc-200 dark:border-zinc-700 my-1"></div>
+                    )}
+                    
+                    {/* List of existing authors */}
+                    {authors.map((author, index) => (
+                      <div 
+                        key={index}
+                        className={`flex items-center px-3 py-2 cursor-pointer hover:bg-blue-500/10 ${
+                          autore === author ? 'bg-blue-500/20' : ''
+                        }`}
+                        onClick={() => handleSelectAuthor(author)}
+                      >
+                        <div className={`flex-shrink-0 h-4 w-4 mr-2 rounded ${
+                          autore === author ? 'bg-blue-500 flex items-center justify-center' : ''
+                        }`}>
+                          {autore === author && (
+                            <FiCheck className="h-3 w-3 text-white" />
+                          )}
+                        </div>
+                        <span className="text-sm text-zinc-800 dark:text-zinc-200 flex-grow">{author}</span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteAuthor(author);
+                          }}
+                          className="text-zinc-400 hover:text-red-500 transition-colors p-1"
+                          title="Elimina autore"
+                        >
+                          <FiTrash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                    
+                    {authors.length === 0 && !isAddingAuthor && (
+                      <div className="px-3 py-2 text-sm text-zinc-500 dark:text-zinc-400">
+                        Nessun autore disponibile
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            {/* Tag - Selezione multipla (limited to 3) */}
+            <div className="relative" ref={tagDropdownRef}>
+              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+                Tag * <span className="text-xs text-zinc-500">(max 3 categorie)</span>
+              </label>
+              <div className="relative">
+                <div 
+                  className="flex items-center w-full p-3 bg-white/5 border border-white/20 rounded-xl focus-within:ring-2 focus-within:ring-blue-500/50 focus-within:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none cursor-pointer"
                   onClick={() => setShowTagsDropdown(!showTagsDropdown)}
                 >
-                  <div className="absolute left-3 top-1/2 transform -translate-y-1/2 pointer-events-none text-zinc-500">
+                  <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-zinc-500">
                     <FiTag className="h-5 w-5" />
                   </div>
-                  <div className="pl-7 flex flex-wrap gap-2">
+                  <div className="pl-10 flex-grow flex flex-wrap gap-2">
                     {selectedTags.length > 0 ? (
                       selectedTags.map(tag => (
                         <span 
@@ -577,45 +847,46 @@ export default function NewArticlePage() {
                           className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200"
                         >
                           {tag}
-                          <button 
-                            type="button" 
-                            className="ml-1.5 inline-flex items-center justify-center h-4 w-4 rounded-full text-blue-400 hover:text-blue-600 dark:hover:text-blue-300 focus:outline-none"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleTag(tag);
-                            }}
-                          >
-                            <FiX className="h-3 w-3" />
-                          </button>
                         </span>
                       ))
                     ) : (
-                      <span className="text-zinc-500">Seleziona una o più categorie</span>
+                      <span className="text-zinc-500">Seleziona da 1 a 3 categorie</span>
                     )}
+                  </div>
+                  <div className="ml-auto text-xs text-zinc-500 flex items-center gap-1">
+                    {selectedTags.length}/3
+                    <FiChevronDown className={`h-4 w-4 text-zinc-500 transition-transform duration-300 ${showTagsDropdown ? 'rotate-180' : ''}`} />
                   </div>
                 </div>
                 
-                {/* Dropdown per la selezione dei tag */}
+                {/* Dropdown for tag selection */}
                 {showTagsDropdown && (
                   <div className="absolute z-10 mt-1 w-full bg-white dark:bg-zinc-800 rounded-xl shadow-lg border border-zinc-200 dark:border-zinc-700 py-1 max-h-60 overflow-auto animate-fade-in">
-                    {availableCategories.map(category => (
+                    {/* Helpful info message */}
+                    <div className="px-3 py-2 text-xs text-zinc-500 dark:text-zinc-400 border-b border-zinc-200 dark:border-zinc-700">
+                      Seleziona da 1 a 3 categorie per il tuo articolo
+                    </div>
+                    
+                    {/* List of available tags */}
+                    {availableCategories.map((tag) => (
                       <div 
-                        key={category}
+                        key={tag}
                         className={`flex items-center px-3 py-2 cursor-pointer hover:bg-blue-500/10 ${
-                          selectedTags.includes(category) ? 'bg-blue-500/10' : ''
+                          selectedTags.includes(tag) ? 'bg-blue-500/20' : ''
                         }`}
-                        onClick={() => toggleTag(category)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleTag(tag);
+                        }}
                       >
-                        <div className={`flex-shrink-0 h-4 w-4 mr-2 rounded border ${
-                          selectedTags.includes(category) 
-                            ? 'bg-blue-500 border-blue-500 flex items-center justify-center' 
-                            : 'border-zinc-300 dark:border-zinc-600'
+                        <div className={`flex-shrink-0 h-4 w-4 mr-2 rounded ${
+                          selectedTags.includes(tag) ? 'bg-blue-500 flex items-center justify-center' : 'border border-zinc-300 dark:border-zinc-600'
                         }`}>
-                          {selectedTags.includes(category) && (
+                          {selectedTags.includes(tag) && (
                             <FiCheck className="h-3 w-3 text-white" />
                           )}
                         </div>
-                        <span className="text-sm text-zinc-800 dark:text-zinc-200">{category}</span>
+                        <span className="text-sm text-zinc-800 dark:text-zinc-200">{tag}</span>
                       </div>
                     ))}
                   </div>
@@ -623,20 +894,87 @@ export default function NewArticlePage() {
               </div>
             </div>
             
-            {/* Partecipanti */}
-            <div className="relative">
+            {/* Partecipanti - improved version */}
+            <div className="relative" ref={participantsDropdownRef}>
               <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">Partecipanti</label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-zinc-500">
-                  <FiUsers className="h-5 w-5" />
+                <div 
+                  className="flex items-center w-full p-3 bg-white/5 border border-white/20 rounded-xl focus-within:ring-2 focus-within:ring-blue-500/50 focus-within:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none cursor-pointer"
+                  onClick={() => setShowParticipantsDropdown(!showParticipantsDropdown)}
+                >
+                  <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-zinc-500">
+                    <FiUsers className="h-5 w-5" />
+                  </div>
+                  <div className="pl-10 flex-grow truncate">
+                    {participants.length > 0 
+                      ? participants.join(", ") 
+                      : "Aggiungi partecipanti all'articolo"}
+                  </div>
+                  <FiChevronDown className={`h-4 w-4 text-zinc-500 transition-transform duration-300 ${showParticipantsDropdown ? 'rotate-180' : ''}`} />
                 </div>
-                <input
-                  type="text"
-                  value={partecipanti}
-                  onChange={(e) => setPartecipanti(e.target.value)}
-                  className="w-full pl-10 p-4 bg-white/5 border border-white/20 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
-                  placeholder="Altri partecipanti all'articolo"
-                />
+                
+                {/* Dropdown for participant management */}
+                {showParticipantsDropdown && (
+                  <div className="absolute z-10 mt-1 w-full bg-white dark:bg-zinc-800 rounded-xl shadow-lg border border-zinc-200 dark:border-zinc-700 py-1 max-h-60 overflow-auto animate-fade-in">
+                    {/* Form to add new participants */}
+                    <div className="p-2 border-b border-zinc-200 dark:border-zinc-700">
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={newParticipant}
+                          onChange={(e) => setNewParticipant(e.target.value)}
+                          placeholder="Nome del partecipante"
+                          className="flex-1 p-2 bg-white/5 border border-white/20 rounded-lg focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleAddParticipant();
+                            }
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          autoFocus
+                        />
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleAddParticipant();
+                          }}
+                          className="cursor-pointer px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+                        >
+                          <FiPlus className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                    
+                    {/* List of added participants */}
+                    <div className="py-1">
+                      {participants.length > 0 ? (
+                        participants.map((participant, index) => (
+                          <div 
+                            key={index}
+                            className="flex items-center justify-between px-3 py-2 hover:bg-zinc-100 dark:hover:bg-zinc-700/50"
+                          >
+                            <span className="text-sm text-zinc-800 dark:text-zinc-200">{participant}</span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRemoveParticipant(participant);
+                              }}
+                              className="text-zinc-400 hover:text-red-500 transition-colors p-1"
+                              title="Rimuovi partecipante"
+                            >
+                              <FiTrash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="px-3 py-2 text-sm text-zinc-500 dark:text-zinc-400">
+                          Nessun partecipante aggiunto
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
             

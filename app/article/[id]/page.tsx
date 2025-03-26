@@ -473,7 +473,7 @@ export default function Article() {
                 Esplora altri articoli
               </button>
             </motion.div>
-          </div>
+              </div>
         </motion.div>
       </motion.div>
     );
@@ -656,10 +656,10 @@ export default function Article() {
                     transition={{ delay: 0.8, duration: 1, ease: "easeOut" }}
                     className="h-full bg-gradient-to-r from-blue-500 to-cyan-400"
                   />
-                </div>
+              </div>
               </motion.div>
             )}
-          </div>
+            </div>
         </motion.div>
       </motion.div>
     );

@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
-import { FiArrowLeft, FiTrash2, FiEye, FiHeart, FiShare2, FiAlertCircle, FiX, FiTrendingUp } from "react-icons/fi"
+import { FiArrowLeft, FiTrash2, FiEye, FiHeart, FiShare2, FiAlertCircle, FiX, FiTrendingUp, FiUsers, FiChevronDown, FiPlus, FiUser, FiCheck } from "react-icons/fi"
 import { getStorage, ref as storageRef, deleteObject, uploadBytes, getDownloadURL } from "firebase/storage"
 import { ref, get, remove, update } from "firebase/database"
 import { onAuthStateChanged } from "firebase/auth"
@@ -60,6 +60,13 @@ export default function ManageArticlesPage() {
     newLinkLabel: ''
   })
   const [displayedArticles, setDisplayedArticles] = useState<number>(5)
+  const [participants, setParticipants] = useState<string[]>([])
+  const [newParticipant, setNewParticipant] = useState('')
+  const [showParticipantsDropdown, setShowParticipantsDropdown] = useState(false)
+  const participantsDropdownRef = useRef<HTMLDivElement>(null)
+  const [authors, setAuthors] = useState<string[]>([])
+  const [showAuthorDropdown, setShowAuthorDropdown] = useState(false)
+  const authorDropdownRef = useRef<HTMLDivElement>(null)
 
   // Add scroll tracking for parallax effects
   const { scrollY } = useScroll()
@@ -345,6 +352,12 @@ export default function ManageArticlesPage() {
         tag: updatedTags.join(', ')
       });
     } else {
+      // Aggiungi il tag solo se non abbiamo già 3 tag selezionati
+      if (currentTags.length >= 3) {
+        showNotification("error", "Non puoi selezionare più di 3 tag");
+        return;
+      }
+      
       // Aggiungi il tag se non è presente
       const updatedTags = [...currentTags, category];
       setEditFormData({
@@ -498,14 +511,86 @@ export default function ManageArticlesPage() {
     return totalScore;
   };
   
-  // Aggiungi questa funzione per ottenere la classe di colore in base alla prestazione
-  const getPerformanceColorClass = (score: number) => {
-    if (score >= 150) return "bg-green-500 dark:bg-green-600";
-    if (score >= 100) return "bg-blue-500 dark:bg-blue-600";
-    if (score >= 70) return "bg-amber-500 dark:bg-amber-600";
-    if (score >= 40) return "bg-orange-500 dark:bg-orange-600";
-    return "bg-red-500 dark:bg-red-600";
+  // Add useEffect for loading the article data
+  useEffect(() => {
+    if (editingArticle) {
+      // Set other article fields...
+      
+      // Handle participants string to array
+      if (editingArticle.partecipanti) {
+        setParticipants(editingArticle.partecipanti.split(", ").map(p => p.trim()));
+      } else {
+        setParticipants([]);
+      }
+      
+      // Fetch authors from Firebase
+      fetchAuthors();
+    }
+  }, [editingArticle]);
+
+  // Add the fetchAuthors function
+  const fetchAuthors = async () => {
+    try {
+      const authorsRef = ref(db, 'autori');
+      const snapshot = await get(authorsRef);
+      
+      if (snapshot.exists()) {
+        const authorsData: string[] = [];
+        snapshot.forEach((childSnapshot) => {
+          authorsData.push(childSnapshot.val().name);
+        });
+        setAuthors(authorsData);
+      }
+    } catch (error) {
+      console.error("Error fetching authors:", error);
+    }
   };
+
+  // Add handlers for participants
+  const handleAddParticipant = () => {
+    if (!newParticipant.trim()) {
+      showNotification("error", "Il nome del partecipante non può essere vuoto");
+      return;
+    }
+    
+    if (participants.includes(newParticipant.trim())) {
+      showNotification("error", "Questo partecipante è già stato aggiunto");
+      return;
+    }
+    
+    setParticipants([...participants, newParticipant.trim()]);
+    setNewParticipant('');
+  };
+
+  const handleRemoveParticipant = (participantToRemove: string) => {
+    setParticipants(participants.filter(p => p !== participantToRemove));
+  };
+
+  // Add handlers for author selection/addition
+  const handleSelectAuthor = (selectedAuthor: string) => {
+    setEditFormData(prev => ({
+      ...prev,
+      autore: selectedAuthor
+    }));
+    setShowAuthorDropdown(false);
+  };
+
+  // Add click outside handlers
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (participantsDropdownRef.current && !participantsDropdownRef.current.contains(event.target as Node)) {
+        setShowParticipantsDropdown(false);
+      }
+      if (authorDropdownRef.current && !authorDropdownRef.current.contains(event.target as Node)) {
+        setShowAuthorDropdown(false);
+      }
+    }
+    
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   if (loading) {
     return (
@@ -711,17 +796,29 @@ export default function ManageArticlesPage() {
             </div>
 
             <div className="space-y-6">
-              {/* Titolo */}
-              <div>
+              {/* Title input with character limit */}
+              <div className="mb-4">
                 <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
-                  Titolo
+                  Titolo * <span className="text-xs text-zinc-500">(max 100 caratteri)</span>
                 </label>
-                <input
-                  type="text"
-                  value={editFormData.titolo}
-                  onChange={(e) => setEditFormData({...editFormData, titolo: e.target.value})}
-                  className="w-full p-3 bg-white/5 border border-white/20 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={editFormData.titolo}
+                    onChange={(e) => {
+                      if (e.target.value.length <= 100) {
+                        setEditFormData({...editFormData, titolo: e.target.value});
+                      }
+                    }}
+                    maxLength={100}
+                    className="w-full p-3 bg-white/5 border border-white/20 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
+                    placeholder="Inserisci il titolo dell'articolo"
+                    required
+                  />
+                  <div className="absolute right-3 bottom-3 text-xs text-zinc-500">
+                    {editFormData.titolo.length}/100
+                  </div>
+                </div>
               </div>
 
               {/* Note secondarie */}
@@ -905,34 +1002,147 @@ export default function ManageArticlesPage() {
 
               {/* Autore e Partecipanti */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
-                    Autore
-                  </label>
-                  <input
-                    type="text"
-                    value={editFormData.autore}
-                    onChange={(e) => setEditFormData({...editFormData, autore: e.target.value})}
-                    className="w-full p-3 bg-white/5 border border-white/20 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
-                  />
+                {/* Author as dropdown - simplified */}
+                <div className="mb-4 relative" ref={authorDropdownRef}>
+                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">Autore *</label>
+                  <div className="relative">
+                    <div 
+                      className="flex items-center w-full p-3 bg-white/5 border border-white/20 rounded-xl focus-within:ring-2 focus-within:ring-blue-500/50 focus-within:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none cursor-pointer"
+                      onClick={() => setShowAuthorDropdown(!showAuthorDropdown)}
+                    >
+                      <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-zinc-500">
+                        <FiUser className="h-5 w-5" />
+                      </div>
+                      <div className="pl-10 flex-grow truncate">
+                        {editFormData.autore || "Seleziona un autore"}
+                      </div>
+                      <FiChevronDown className={`h-4 w-4 text-zinc-500 transition-transform duration-300 ${showAuthorDropdown ? 'rotate-180' : ''}`} />
+                    </div>
+                    
+                    {/* Dropdown for author selection - simplified */}
+                    {showAuthorDropdown && (
+                      <div className="absolute z-10 mt-1 w-full bg-white dark:bg-zinc-800 rounded-xl shadow-lg border border-zinc-200 dark:border-zinc-700 py-1 max-h-60 overflow-auto animate-fade-in">
+                        {authors.length > 0 ? (
+                          authors.map((authorName, index) => (
+                            <div 
+                              key={index}
+                              className={`flex items-center px-3 py-2 cursor-pointer hover:bg-blue-500/10 ${
+                                editFormData.autore === authorName ? 'bg-blue-500/20' : ''
+                              }`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSelectAuthor(authorName);
+                              }}
+                            >
+                              <div className={`flex-shrink-0 h-4 w-4 mr-2 rounded ${
+                                editFormData.autore === authorName ? 'bg-blue-500 flex items-center justify-center' : ''
+                              }`}>
+                                {editFormData.autore === authorName && (
+                                  <FiCheck className="h-3 w-3 text-white" />
+                                )}
+                              </div>
+                              <span className="text-sm text-zinc-800 dark:text-zinc-200">{authorName}</span>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="px-3 py-2 text-sm text-zinc-500 dark:text-zinc-400">
+                            Nessun autore disponibile
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
-                    Partecipanti
-                  </label>
-                  <input
-                    type="text"
-                    value={editFormData.partecipanti}
-                    onChange={(e) => setEditFormData({...editFormData, partecipanti: e.target.value})}
-                    className="w-full p-3 bg-white/5 border border-white/20 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
-                  />
+
+                {/* Participants dropdown */}
+                <div className="mb-4 relative" ref={participantsDropdownRef}>
+                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">Partecipanti</label>
+                  <div className="relative">
+                    <div 
+                      className="flex items-center w-full p-3 bg-white/5 border border-white/20 rounded-xl focus-within:ring-2 focus-within:ring-blue-500/50 focus-within:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none cursor-pointer"
+                      onClick={() => setShowParticipantsDropdown(!showParticipantsDropdown)}
+                    >
+                      <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-zinc-500">
+                        <FiUsers className="h-5 w-5" />
+                      </div>
+                      <div className="pl-10 flex-grow truncate">
+                        {participants.length > 0 
+                          ? participants.join(", ") 
+                          : "Aggiungi partecipanti all'articolo"}
+                      </div>
+                      <FiChevronDown className={`h-4 w-4 text-zinc-500 transition-transform duration-300 ${showParticipantsDropdown ? 'rotate-180' : ''}`} />
+                    </div>
+                    
+                    {/* Dropdown for participant management */}
+                    {showParticipantsDropdown && (
+                      <div className="absolute z-10 mt-1 w-full bg-white dark:bg-zinc-800 rounded-xl shadow-lg border border-zinc-200 dark:border-zinc-700 py-1 max-h-60 overflow-auto animate-fade-in">
+                        {/* Form to add new participants */}
+                        <div className="p-2 border-b border-zinc-200 dark:border-zinc-700">
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={newParticipant}
+                              onChange={(e) => setNewParticipant(e.target.value)}
+                              placeholder="Nome del partecipante"
+                              className="flex-1 p-2 bg-white/5 border border-white/20 rounded-lg focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 text-zinc-900 dark:text-zinc-50 outline-none"
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  handleAddParticipant();
+                                }
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                              autoFocus
+                            />
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleAddParticipant();
+                              }}
+                              className="cursor-pointer px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+                            >
+                              <FiPlus className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+                        
+                        {/* List of added participants */}
+                        <div className="py-1">
+                          {participants.length > 0 ? (
+                            participants.map((participant, index) => (
+                              <div 
+                                key={index}
+                                className="flex items-center justify-between px-3 py-2 hover:bg-zinc-100 dark:hover:bg-zinc-700/50"
+                              >
+                                <span className="text-sm text-zinc-800 dark:text-zinc-200">{participant}</span>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRemoveParticipant(participant);
+                                  }}
+                                  className="text-zinc-400 hover:text-red-500 transition-colors p-1"
+                                  title="Rimuovi partecipante"
+                                >
+                                  <FiTrash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="px-3 py-2 text-sm text-zinc-500 dark:text-zinc-400">
+                              Nessun partecipante aggiunto
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
               {/* Tags */}
               <div>
                 <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
-                  Categorie
+                  Categorie <span className="text-xs text-zinc-500">({editFormData.tag.split(',').filter(t => t.trim()).length}/3)</span>
                 </label>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 p-4 bg-white/5 border border-white/20 rounded-xl">
                   {availableCategories.map((category) => {
@@ -969,6 +1179,7 @@ export default function ManageArticlesPage() {
                     );
                   })}
                 </div>
+                <p className="mt-1 text-xs text-zinc-500">Puoi selezionare massimo 3 categorie</p>
               </div>
 
               {/* Visibilità */}
