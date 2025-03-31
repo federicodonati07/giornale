@@ -45,6 +45,8 @@ interface ArticleData {
   userId: string;
   isPrivate: boolean;
   status: string;
+  relatedImages?: string[]; // Array di URL per le immagini correlate
+  sensitiveTags?: string[]; // Array che contiene quali immagini sono marcate come sensibili
 }
 
 export default function NewArticlePage() {
@@ -63,8 +65,13 @@ export default function NewArticlePage() {
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [showTagsDropdown, setShowTagsDropdown] = useState(false)
-  const [partecipanti, setPartecipanti] = useState("")
   const tagDropdownRef = useRef<HTMLDivElement>(null)
+  
+  // Stati per le immagini correlate
+  const [relatedFiles, setRelatedFiles] = useState<(File | null)[]>([null, null, null])
+  const [relatedPreviews, setRelatedPreviews] = useState<(string | null)[]>([null, null, null])
+  const [relatedSensitiveFlags, setRelatedSensitiveFlags] = useState<boolean[]>([false, false, false])
+  const relatedFileInputRefs = useRef<(HTMLInputElement | null)[]>([null, null, null])
   
   // Refs per gli elementi con effetti parallax
   const headerRef = useRef<HTMLDivElement>(null)
@@ -284,6 +291,91 @@ export default function NewArticlePage() {
     });
   };
 
+  // Gestione delle immagini correlate
+  const handleRelatedFileChange = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null
+    
+    // Aggiorna l'array di file correlati
+    const newRelatedFiles = [...relatedFiles]
+    newRelatedFiles[index] = file
+    setRelatedFiles(newRelatedFiles)
+    
+    if (file) {
+      // Crea un URL per l'anteprima
+      const previewURL = URL.createObjectURL(file)
+      
+      // Aggiorna l'array di anteprime
+      const newRelatedPreviews = [...relatedPreviews]
+      newRelatedPreviews[index] = previewURL
+      setRelatedPreviews(newRelatedPreviews)
+    } else {
+      // Rimuovi l'anteprima se il file è stato rimosso
+      const newRelatedPreviews = [...relatedPreviews]
+      newRelatedPreviews[index] = null
+      setRelatedPreviews(newRelatedPreviews)
+    }
+  }
+  
+  // Rimuovi immagine correlata
+  const removeRelatedImage = (index: number) => {
+    const newRelatedFiles = [...relatedFiles]
+    const newRelatedPreviews = [...relatedPreviews]
+    
+    // Imposta il file e l'anteprima a null
+    newRelatedFiles[index] = null
+    newRelatedPreviews[index] = null
+    
+    setRelatedFiles(newRelatedFiles)
+    setRelatedPreviews(newRelatedPreviews)
+    
+    // Resetta anche l'input file
+    if (relatedFileInputRefs.current[index]) {
+      (relatedFileInputRefs.current[index] as HTMLInputElement).value = ""
+    }
+  }
+
+  // Funzione per caricare le immagini correlate su Firebase Storage
+  const uploadRelatedImages = async (uuid: string): Promise<string[]> => {
+    const uploadPromises: Promise<string>[] = []
+    
+    // Per ogni immagine correlata, crea un promise di caricamento
+    relatedFiles.forEach((file, index) => {
+      if (file) {
+        const fileExtension = file.name.split('.').pop()
+        const fileRef = storageRef(storage, `articoli/related/${uuid}/related_${index + 1}.${fileExtension}`)
+        
+        const uploadPromise = new Promise<string>((resolve, reject) => {
+          const uploadTask = uploadBytesResumable(fileRef, file)
+          
+          uploadTask.on(
+            'state_changed',
+            () => {
+              // Il progresso viene gestito globalmente nella funzione saveArticle
+            },
+            (error) => {
+              console.error(`Errore durante il caricamento dell'immagine correlata ${index + 1}:`, error)
+              reject(error)
+            },
+            async () => {
+              try {
+                const downloadURL = await getDownloadURL(uploadTask.snapshot.ref)
+                resolve(downloadURL)
+              } catch (error) {
+                reject(error)
+              }
+            }
+          )
+        })
+        
+        uploadPromises.push(uploadPromise)
+      }
+    })
+    
+    // Attendi che tutte le immagini correlate siano caricate
+    const urls = await Promise.all(uploadPromises)
+    return urls
+  }
+
   // Funzione per salvare l'articolo
   const saveArticle = async () => {
     if (!titolo || !autore || !contenuto || !selectedFile || selectedTags.length === 0) {
@@ -302,14 +394,44 @@ export default function NewArticlePage() {
 
     try {
       const articleUuid = uuidv4();
+      
+      // Calcola quante immagini totali devono essere caricate (principale + correlate)
+      const relatedImagesCount = relatedFiles.filter(file => file !== null).length;
+      const totalImages = 1 + relatedImagesCount;
+      const progressPerImage = 50 / totalImages; // 50% del progresso totale è per le immagini
+      
+      // Carica l'immagine principale
       let imageUrl = "";
       try {
         imageUrl = await uploadImage(selectedFile, articleUuid);
+        setOverallProgress(progressPerImage); // Aggiorna il progresso dopo l'upload dell'immagine principale
       } catch (error) {
-        showNotification("error", error instanceof Error ? error.message : "Errore durante il caricamento dell'immagine");
+        console.error("Errore durante il caricamento dell'immagine principale:", error);
+        showNotification("error", "Si è verificato un errore durante il caricamento dell'immagine principale");
         setSaving(false);
         return;
       }
+      
+      // Carica le immagini correlate
+      let relatedImageUrls: string[] = [];
+      if (relatedImagesCount > 0) {
+        try {
+          relatedImageUrls = await uploadRelatedImages(articleUuid);
+          setOverallProgress(progressPerImage * (1 + relatedImageUrls.length)); // Aggiorna il progresso dopo l'upload di tutte le immagini
+        } catch (error) {
+          console.error("Errore durante il caricamento delle immagini correlate:", error);
+          showNotification("error", "Si è verificato un errore durante il caricamento delle immagini correlate");
+          // Continuiamo comunque con il salvataggio dell'articolo anche se ci sono errori con le immagini correlate
+        }
+      }
+
+      // Crea un array con i tag delle immagini sensibili
+      const sensitiveTags: string[] = [];
+      relatedSensitiveFlags.forEach((isSensitive, index) => {
+        if (isSensitive && relatedFiles[index]) {
+          sensitiveTags.push(`related_${index + 1}`);
+        }
+      });
 
       const articleData: ArticleData = {
         titolo,
@@ -328,6 +450,8 @@ export default function NewArticlePage() {
         userId: currentUser.uid,
         isPrivate,
         status: 'revision',
+        relatedImages: relatedImageUrls.length > 0 ? relatedImageUrls : undefined,
+        sensitiveTags: sensitiveTags.length > 0 ? sensitiveTags : undefined,
       };
 
       try {
@@ -1268,7 +1392,7 @@ export default function NewArticlePage() {
 
             {/* Caricamento immagine - SPOSTATO QUI */}
             <div className="md:col-span-2 relative">
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">Immagine *</label>
+              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">Immagine principale *</label>
               <div className="relative">
                 <input
                   type="file"
@@ -1333,16 +1457,118 @@ export default function NewArticlePage() {
                               fileInputRef.current.value = "";
                             }
                           }}
-                          className="bg-red-500 text-white rounded-full p-1 shadow-lg hover:bg-red-600 transition-colors"
+                          className="bg-red-500 text-white rounded-full p-1 shadow-lg hover:bg-red-600 transition-colors cursor-pointer"
                           title="Rimuovi immagine"
                         >
-                          <FiX className="h-4 w-4" />
+                          <FiTrash2 className="h-4 w-4" />
                         </button>
                       </div>
                     </div>
                   )}
                 </div>
               </div>
+            </div>
+            
+            {/* Caricamento immagini correlate */}
+            <div className="md:col-span-2 relative mt-6">
+              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+                Immagini correlate (opzionali) <span className="text-xs text-zinc-500">(max 3 immagini)</span>
+              </label>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {[0, 1, 2].map((index) => (
+                  <div key={index} className="relative">
+                    <input
+                      type="file"
+                      ref={el => { relatedFileInputRefs.current[index] = el }}
+                      accept="image/*"
+                      onChange={(e) => handleRelatedFileChange(index, e)}
+                      className="hidden"
+                    />
+                    
+                    {relatedPreviews[index] ? (
+                      <div className="relative h-48 rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-700 shadow-md group">
+                        <img 
+                          src={relatedPreviews[index]!} 
+                          alt={`Immagine correlata ${index + 1}`} 
+                          className={`w-full h-full object-cover transition-all duration-300 ${relatedSensitiveFlags[index] ? 'blur-sm group-hover:blur-none' : ''}`}
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-100 pointer-events-none"></div>
+                        <div className="absolute top-2 right-2 flex gap-2">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (relatedPreviews[index]) {
+                                document.execCommand('insertImage', false, relatedPreviews[index]!);
+                              }
+                            }}
+                            className="bg-blue-500 text-white rounded-full p-1 shadow-lg hover:bg-blue-600 transition-colors"
+                            title="Inserisci nell'editor"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              removeRelatedImage(index);
+                            }}
+                            className="bg-red-500 text-white rounded-full p-1 shadow-lg hover:bg-red-600 transition-colors cursor-pointer"
+                            title="Rimuovi immagine"
+                          >
+                            <FiTrash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                        
+                        {/* Switch moderno per contenuto sensibile */}
+                        <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/90 to-black/40 text-white flex items-center justify-between transition-all duration-300">
+                          <span className="text-xs font-medium">Immagine {index + 1}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs whitespace-nowrap">Sensibile</span>
+                            <button 
+                              onClick={() => {
+                                const newFlags = [...relatedSensitiveFlags];
+                                newFlags[index] = !newFlags[index];
+                                setRelatedSensitiveFlags(newFlags);
+                              }}
+                              className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors duration-300 focus:outline-none cursor-pointer ${relatedSensitiveFlags[index] ? 'bg-rose-500' : 'bg-zinc-400'}`}
+                            >
+                              <span className="sr-only">Attiva contenuto sensibile</span>
+                              <span
+                                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-md transition-transform duration-300 ${relatedSensitiveFlags[index] ? 'translate-x-5' : 'translate-x-1'}`}
+                              />
+                            </button>
+                          </div>
+                        </div>
+                        
+                        {/* Badge per contenuto sensibile */}
+                        {relatedSensitiveFlags[index] && (
+                          <div className="absolute top-2 left-2 bg-rose-500 text-white text-xs font-bold px-2 py-1 rounded shadow-md">
+                            SENSIBILE
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      // Mostra l'area di caricamento se non c'è un'immagine
+                      <div 
+                        onClick={() => relatedFileInputRefs.current[index]?.click()}
+                        className="h-48 p-6 bg-white/5 dark:bg-zinc-800/20 border-2 border-dashed border-zinc-300 dark:border-zinc-700 rounded-xl hover:border-amber-500 dark:hover:border-amber-400 transition-all duration-300 cursor-pointer flex flex-col items-center justify-center"
+                      >
+                        <div className="mx-auto h-10 w-10 rounded-full bg-amber-100 dark:bg-amber-900 flex items-center justify-center mb-3">
+                          <FiUpload className="h-5 w-5 text-amber-600 dark:text-amber-300" />
+                        </div>
+                        <p className="text-sm text-zinc-800 dark:text-zinc-300 font-medium text-center">Immagine correlata {index + 1}</p>
+                        <p className="text-xs text-zinc-500 mt-1 text-center">Clicca per caricare</p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              
+              <p className="mt-2 text-xs text-zinc-500">
+                Le immagini correlate verranno mostrate nella galleria dell&apos;articolo
+              </p>
             </div>
           </div>
           

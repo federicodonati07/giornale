@@ -31,6 +31,9 @@ interface ArticleData {
   scheduleDate?: string // Data per la pubblicazione programmata
   additionalLinks?: { label: string; url: string }[]
   formattedScheduleDate?: string
+  relatedImages?: string[] // Array di URL per le immagini correlate
+  sensitiveTags?: string[] // Array che contiene quali immagini sono marcate come sensibili
+  secondaryNotes?: { id: string; content: string }[]
 }
 
 // Default time for scheduling
@@ -204,6 +207,35 @@ export default function ReviewArticlesPage() {
             console.error("Errore durante l'eliminazione dell'immagine:", imageError);
           }
           // Continuiamo comunque anche se l'eliminazione dell'immagine fallisce
+        }
+      }
+      
+      // Elimina le immagini correlate se esistono
+      if (articleToDelete.relatedImages && articleToDelete.relatedImages.length > 0) {
+        try {
+          const storage = getStorage(app);
+          
+          // Tenta di eliminare la cartella che contiene le immagini correlate
+          for (const relatedImageUrl of articleToDelete.relatedImages) {
+            if (relatedImageUrl && relatedImageUrl.includes('firebasestorage.googleapis.com')) {
+              try {
+                const url = new URL(relatedImageUrl);
+                const imagePath = decodeURIComponent(url.pathname.split('/o/')[1].split('?')[0]);
+                const imageRef = storageRef(storage, imagePath);
+                
+                await deleteObject(imageRef);
+                console.log("Immagine correlata eliminata con successo:", imagePath);
+              } catch (relatedImageError: FirebaseError | unknown) {
+                if (relatedImageError instanceof FirebaseError && relatedImageError.code === 'storage/object-not-found') {
+                  console.log("L'immagine correlata non esiste più nello storage");
+                } else {
+                  console.error("Errore durante l'eliminazione dell'immagine correlata:", relatedImageError);
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.error("Errore durante l'eliminazione delle immagini correlate:", error);
         }
       }
       
@@ -665,6 +697,50 @@ export default function ReviewArticlesPage() {
                 />
               </div>
               
+              {/* Galleria immagini correlate */}
+              {selectedArticle.relatedImages && selectedArticle.relatedImages.length > 0 && (
+                <div className="max-w-3xl mx-auto mb-8">
+                  <h3 className="text-sm font-medium text-zinc-800 dark:text-zinc-300 mb-4">Galleria immagini</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    {selectedArticle.relatedImages.map((imageUrl, index) => {
+                      // Determinare se questa immagine è marcata come sensibile
+                      const tagToCheck = `related_${index + 1}`;
+                      const isSensitive = selectedArticle.sensitiveTags?.includes(tagToCheck) || false;
+                      
+                      return (
+                        <div 
+                          key={index} 
+                          className="relative aspect-video rounded-xl overflow-hidden group"
+                        >
+                          <Image
+                            src={imageUrl}
+                            alt={`Immagine correlata ${index + 1}`}
+                            fill
+                            className={`object-cover transition-all duration-300 ${
+                              isSensitive ? 'blur-md group-hover:blur-none' : ''
+                            }`}
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.src = '/placeholder-image.jpg';
+                            }}
+                          />
+                          
+                          {/* Overlay gradiente per migliorare la leggibilità */}
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                          
+                          {/* Badge per contenuto sensibile */}
+                          {isSensitive && (
+                            <div className="absolute top-2 left-2 bg-rose-500 text-white text-xs font-bold px-2 py-1 rounded shadow-md">
+                              SENSIBILE
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              
               {/* Titolo e info */}
               <article className="max-w-3xl mx-auto">
                 <h1 className="font-serif text-2xl sm:text-3xl font-bold text-zinc-900 dark:text-zinc-50 mb-4">
@@ -680,6 +756,34 @@ export default function ReviewArticlesPage() {
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-zinc-800 dark:text-zinc-200">Data:</span>
                       <span className="text-zinc-600 dark:text-zinc-400">{formatFullDate(selectedArticle.creazione)}</span>
+                    </div>
+                    {selectedArticle.partecipanti && (
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-zinc-800 dark:text-zinc-200">Partecipanti:</span>
+                        <span className="text-zinc-600 dark:text-zinc-400">{selectedArticle.partecipanti}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-zinc-800 dark:text-zinc-200">Visibilità:</span>
+                      <span className={`text-zinc-600 dark:text-zinc-400 inline-flex items-center gap-1 ${
+                        selectedArticle.isPrivate ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'
+                      }`}>
+                        {selectedArticle.isPrivate ? (
+                          <>
+                            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                            </svg>
+                            Privato
+                          </>
+                        ) : (
+                          <>
+                            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Pubblico
+                          </>
+                        )}
+                      </span>
                     </div>
                   </div>
                   
@@ -727,6 +831,25 @@ export default function ReviewArticlesPage() {
                   }}
                 >
                 </div>
+                
+                {/* Note secondarie */}
+                {selectedArticle.secondaryNotes && selectedArticle.secondaryNotes.length > 0 && (
+                  <div className="mt-8 pt-6 border-t border-zinc-200 dark:border-zinc-700">
+                    <h3 className="text-sm font-medium text-zinc-800 dark:text-zinc-300 mb-4">Note aggiuntive</h3>
+                    <div className="space-y-3">
+                      {selectedArticle.secondaryNotes.map((note, index) => (
+                        <div 
+                          key={note.id || index}
+                          className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-100 dark:border-amber-800/50 rounded-lg"
+                        >
+                          <p className="text-amber-800 dark:text-amber-300 text-sm">
+                            {note.content}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 
                 {/* Link aggiuntivi */}
                 {selectedArticle.additionalLinks && selectedArticle.additionalLinks.length > 0 && (

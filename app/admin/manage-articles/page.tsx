@@ -4,8 +4,8 @@ import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
-import { FiArrowLeft, FiTrash2, FiEye, FiHeart, FiShare2, FiAlertCircle, FiX, FiTrendingUp, FiUsers, FiChevronDown, FiPlus, FiUser, FiCheck } from "react-icons/fi"
-import { getStorage, ref as storageRef, deleteObject, uploadBytes, getDownloadURL } from "firebase/storage"
+import { FiArrowLeft, FiTrash2, FiEye, FiHeart, FiShare2, FiAlertCircle, FiX, FiTrendingUp, FiUsers, FiChevronDown, FiPlus, FiUser, FiCheck, FiUpload } from "react-icons/fi"
+import { getStorage, ref as storageRef, deleteObject, uploadBytes, getDownloadURL, uploadBytesResumable } from "firebase/storage"
 import { ref, get, remove, update } from "firebase/database"
 import { onAuthStateChanged } from "firebase/auth"
 import { FirebaseError } from "firebase/app"
@@ -30,6 +30,8 @@ interface ArticleData {
   additionalLinks?: { label: string; url: string }[]
   scheduleDate?: string
   secondaryNotes?: { id: string; content: string }[]
+  relatedImages?: string[]
+  sensitiveTags?: string[]
 }
 
 export default function ManageArticlesPage() {
@@ -72,6 +74,12 @@ export default function ManageArticlesPage() {
   const [selectedArticles, setSelectedArticles] = useState<string[]>([]);
   const [showSuspended, setShowSuspended] = useState<boolean>(false);
   const [bulkActionConfirm, setBulkActionConfirm] = useState<{type: 'delete' | 'suspend' | 'activate' | 'revision', count: number} | null>(null);
+  
+  // Aggiungi questi state per gestire le immagini correlate
+  const [relatedFiles, setRelatedFiles] = useState<(File | null)[]>([null, null, null]);
+  const [relatedPreviews, setRelatedPreviews] = useState<(string | null)[]>([null, null, null]);
+  const [relatedSensitiveFlags, setRelatedSensitiveFlags] = useState<boolean[]>([false, false, false]);
+  const relatedFileInputRefs = useRef<(HTMLInputElement | null)[]>([null, null, null]);
 
   // Add scroll tracking for parallax effects
   const { scrollY } = useScroll()
@@ -94,7 +102,7 @@ export default function ManageArticlesPage() {
   const searchBarY = useTransform(scrollY, [0, 200], [0, -5])
   const tableOpacity = useTransform(scrollY, [0, 100], [0.95, 1])
   const tableY = useTransform(scrollY, [0, 100], [15, 0])
-  
+
   // Aggiungi questo useEffect per creare lo stile delle scrollbar nascoste
   useEffect(() => {
     // Crea un elemento di stile per nascondere le scrollbar
@@ -246,6 +254,35 @@ export default function ManageArticlesPage() {
         }
       }
       
+      // Elimina le immagini correlate se esistono
+      if (articleToDelete.relatedImages && articleToDelete.relatedImages.length > 0) {
+        try {
+          const storage = getStorage(app);
+          
+          // Tenta di eliminare la cartella che contiene le immagini correlate
+          for (const relatedImageUrl of articleToDelete.relatedImages) {
+            if (relatedImageUrl && relatedImageUrl.includes('firebasestorage.googleapis.com')) {
+              try {
+                const url = new URL(relatedImageUrl);
+                const imagePath = decodeURIComponent(url.pathname.split('/o/')[1].split('?')[0]);
+                const imageRef = storageRef(storage, imagePath);
+                
+                await deleteObject(imageRef);
+                console.log("Immagine correlata eliminata con successo:", imagePath);
+              } catch (relatedImageError: FirebaseError | unknown) {
+                if (relatedImageError instanceof FirebaseError && relatedImageError.code === 'storage/object-not-found') {
+                  console.log("L'immagine correlata non esiste più nello storage");
+                } else {
+                  console.error("Errore durante l'eliminazione dell'immagine correlata:", relatedImageError);
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.error("Errore durante l'eliminazione delle immagini correlate:", error);
+        }
+      }
+      
       // Aggiorna la lista degli articoli
       setArticles(articles.filter(article => article.uuid !== uuid));
       showNotification("success", "Articolo eliminato con successo");
@@ -272,11 +309,11 @@ export default function ManageArticlesPage() {
     
     try {
       const date = new Date(dateString);
-      return date.toLocaleDateString('it-IT', {
+    return date.toLocaleDateString('it-IT', { 
         day: 'numeric',
         month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
         minute: '2-digit',
       });
     } catch (error) {
@@ -407,17 +444,104 @@ export default function ManageArticlesPage() {
     if (!editingArticle) return;
     
     try {
+      // Carica l'immagine principale se è stata modificata
+      const mainImageUrl = editFormData.immagine;
+      
+      // Carica le immagini correlate che sono state aggiunte o modificate
+      let relatedImageUrls: string[] = [];
+      const storage = getStorage(app);
+      
+      // Tiene traccia di quali indici sono stati modificati per successivamente eliminare le vecchie immagini
+      const modifiedIndices: number[] = [];
+      
+      // Per le immagini correlate già esistenti che non sono state modificate
+      if (editingArticle.relatedImages) {
+        relatedPreviews.forEach((preview, index) => {
+          // Se l'anteprima corrisponde a un'immagine esistente e non è stata modificata
+          if (preview && !relatedFiles[index] && editingArticle.relatedImages && 
+              index < editingArticle.relatedImages.length) {
+            relatedImageUrls[index] = editingArticle.relatedImages[index];
+          } else if (relatedFiles[index]) {
+            // Se c'è un nuovo file, segna questo indice come modificato
+            modifiedIndices.push(index);
+          }
+        });
+      } else {
+        // Se non ci sono immagini correlate esistenti, tutte le nuove sono modifiche
+        relatedFiles.forEach((file, index) => {
+          if (file) {
+            modifiedIndices.push(index);
+          }
+        });
+      }
+      
+      // Elimina le vecchie immagini per gli indici modificati prima di caricare le nuove
+      if (editingArticle.relatedImages && modifiedIndices.length > 0) {
+        for (const index of modifiedIndices) {
+          if (index < editingArticle.relatedImages.length && editingArticle.relatedImages[index]) {
+            try {
+              const oldImageUrl = new URL(editingArticle.relatedImages[index]);
+              const oldImagePath = decodeURIComponent(oldImageUrl.pathname.split('/o/')[1].split('?')[0]);
+              const oldImageRef = storageRef(storage, oldImagePath);
+              
+              await deleteObject(oldImageRef);
+              console.log(`Immagine correlata precedente eliminata con successo: related_${index + 1}`);
+            } catch (error) {
+              console.error(`Errore durante l'eliminazione dell'immagine correlata precedente related_${index + 1}:`, error);
+              // Continuiamo comunque con il caricamento anche se l'eliminazione fallisce
+            }
+          }
+        }
+      }
+      
+      // Carica le nuove immagini correlate
+      if (relatedFiles.some(file => file !== null)) {
+        try {
+          const newUrls = await uploadRelatedImages(editingArticle.uuid);
+          
+          // Combina le URL delle immagini esistenti e le nuove
+          relatedFiles.forEach((file, index) => {
+            if (file) {
+              // Se c'è un file nuovo, usa l'URL appena caricata
+              const urlIndex = relatedFiles.slice(0, index + 1).filter(f => f !== null).length - 1;
+              if (urlIndex >= 0 && urlIndex < newUrls.length) {
+                relatedImageUrls[index] = newUrls[urlIndex];
+              }
+            } else if (!relatedImageUrls[index] && relatedPreviews[index]) {
+              // Se non c'è un file nuovo ma c'è un'anteprima, potrebbe essere un'immagine esistente
+              relatedImageUrls[index] = relatedPreviews[index]!;
+            }
+          });
+        } catch (error) {
+          console.error("Errore durante il caricamento delle immagini correlate:", error);
+          showNotification("error", "Si è verificato un errore durante il caricamento delle immagini correlate");
+        }
+      }
+      
+      // Rimuovi i null dall'array di URL
+      relatedImageUrls = relatedImageUrls.filter(url => url);
+      
+      // Crea l'array di tag per le immagini sensibili
+      const sensitiveTags: string[] = [];
+      relatedSensitiveFlags.forEach((isSensitive, index) => {
+        if (isSensitive && (relatedFiles[index] || relatedPreviews[index])) {
+          sensitiveTags.push(`related_${index + 1}`);
+        }
+      });
+      
       const articleRef = ref(db, `articoli/${editingArticle.uuid}`);
       await update(articleRef, {
         titolo: editFormData.titolo,
-        contenuto: editFormData.contenuto, // Ora contiene direttamente l'HTML
+        contenuto: editFormData.contenuto,
         tag: editFormData.tag.split(',').map(t => t.trim()).join(', '),
         autore: editFormData.autore,
         partecipanti: editFormData.partecipanti,
         isPrivate: editFormData.isPrivate,
-        immagine: editFormData.immagine,
+        immagine: mainImageUrl,
         additionalLinks: editFormData.additionalLinks,
-        secondaryNotes: editFormData.secondaryNotes
+        secondaryNotes: editFormData.secondaryNotes,
+        relatedImages: relatedImageUrls.length > 0 ? relatedImageUrls : null,
+        sensitiveTags: sensitiveTags.length > 0 ? sensitiveTags : null
       });
       
       // Aggiorna la lista degli articoli
@@ -426,7 +550,9 @@ export default function ManageArticlesPage() {
           ? { 
               ...article, 
               ...editFormData,
-              tag: editFormData.tag.split(',').map(t => t.trim()).join(', ')
+              tag: editFormData.tag.split(',').map(t => t.trim()).join(', '),
+              relatedImages: relatedImageUrls.length > 0 ? relatedImageUrls : undefined,
+              sensitiveTags: sensitiveTags.length > 0 ? sensitiveTags : undefined
             }
           : article
       ));
@@ -566,6 +692,40 @@ export default function ManageArticlesPage() {
       
       // Fetch authors from Firebase
       fetchAuthors();
+      
+      // Reset related images state
+      setRelatedFiles([null, null, null]);
+      setRelatedPreviews([null, null, null]);
+      setRelatedSensitiveFlags([false, false, false]);
+      
+      // Load existing related images
+      if (editingArticle.relatedImages && editingArticle.relatedImages.length > 0) {
+        const newPreviews = [...relatedPreviews];
+        
+        editingArticle.relatedImages.forEach((url, index) => {
+          if (index < 3) { // Ensure we only load up to 3 images
+            newPreviews[index] = url;
+          }
+        });
+        
+        setRelatedPreviews(newPreviews);
+        
+        // Set sensitive flags based on sensitiveTags
+        if (editingArticle.sensitiveTags) {
+          const newFlags = [...relatedSensitiveFlags];
+          
+          editingArticle.sensitiveTags.forEach(tag => {
+            if (tag.startsWith('related_')) {
+              const index = parseInt(tag.split('_')[1]) - 1;
+              if (index >= 0 && index < 3) {
+                newFlags[index] = true;
+              }
+            }
+          });
+          
+          setRelatedSensitiveFlags(newFlags);
+        }
+      }
     }
   }, [editingArticle]);
 
@@ -768,6 +928,36 @@ export default function ManageArticlesPage() {
                 console.error("Errore durante l'eliminazione dell'immagine:", imageError);
               }
             }
+            
+            // Elimina le immagini correlate se esistono
+            if (articleToDelete?.relatedImages && articleToDelete.relatedImages.length > 0) {
+              try {
+                const storage = getStorage(app);
+                
+                // Tenta di eliminare le immagini correlate
+                for (const relatedImageUrl of articleToDelete.relatedImages) {
+                  if (relatedImageUrl && relatedImageUrl.includes('firebasestorage.googleapis.com')) {
+                    try {
+                      const url = new URL(relatedImageUrl);
+                      const imagePath = decodeURIComponent(url.pathname.split('/o/')[1].split('?')[0]);
+                      const imageRef = storageRef(storage, imagePath);
+                      
+                      await deleteObject(imageRef);
+                      console.log("Immagine correlata eliminata con successo:", imagePath);
+                    } catch (relatedImageError: FirebaseError | unknown) {
+                      if (relatedImageError instanceof FirebaseError && relatedImageError.code === 'storage/object-not-found') {
+                        console.log("L'immagine correlata non esiste più nello storage");
+                      } else {
+                        console.error("Errore durante l'eliminazione dell'immagine correlata:", relatedImageError);
+                      }
+                    }
+                  }
+                }
+              } catch (error) {
+                console.error("Errore durante l'eliminazione delle immagini correlate:", error);
+              }
+            }
+            
             await remove(articleRef);
             break;
             
@@ -810,6 +1000,123 @@ export default function ManageArticlesPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Aggiungi la funzione per gestire il caricamento delle immagini correlate
+  const handleRelatedFileChange = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+    
+    // Aggiorna l'array di file correlati
+    const newRelatedFiles = [...relatedFiles];
+    newRelatedFiles[index] = file;
+    setRelatedFiles(newRelatedFiles);
+    
+    if (file) {
+      // Crea un URL per l'anteprima
+      const previewURL = URL.createObjectURL(file);
+      
+      // Aggiorna l'array di anteprime
+      const newRelatedPreviews = [...relatedPreviews];
+      newRelatedPreviews[index] = previewURL;
+      setRelatedPreviews(newRelatedPreviews);
+    } else {
+      // Rimuovi l'anteprima se il file è stato rimosso
+      const newRelatedPreviews = [...relatedPreviews];
+      newRelatedPreviews[index] = null;
+      setRelatedPreviews(newRelatedPreviews);
+    }
+  };
+  
+  // Rimuovi immagine correlata
+  const removeRelatedImage = (index: number) => {
+    if (!editingArticle) return;
+    
+    const newRelatedFiles = [...relatedFiles];
+    const newRelatedPreviews = [...relatedPreviews];
+    
+    // Se c'è un'immagine correlata esistente, eliminala dallo storage di Firebase
+    if (editingArticle.relatedImages && 
+        index < editingArticle.relatedImages.length && 
+        editingArticle.relatedImages[index] && 
+        !relatedFiles[index]) {
+      try {
+        const storage = getStorage(app);
+        const oldImageUrl = new URL(editingArticle.relatedImages[index]);
+        const oldImagePath = decodeURIComponent(oldImageUrl.pathname.split('/o/')[1].split('?')[0]);
+        const oldImageRef = storageRef(storage, oldImagePath);
+        
+        // Elimina l'immagine da Firebase Storage
+        deleteObject(oldImageRef).then(() => {
+          console.log(`Immagine correlata eliminata con successo dallo storage: related_${index + 1}`);
+        }).catch((error) => {
+          console.error(`Errore durante l'eliminazione dell'immagine correlata dallo storage: related_${index + 1}`, error);
+        });
+      } catch (error) {
+        console.error(`Errore durante l'eliminazione dell'immagine correlata: related_${index + 1}`, error);
+      }
+    }
+    
+    // Imposta il file e l'anteprima a null
+    newRelatedFiles[index] = null;
+    newRelatedPreviews[index] = null;
+    
+    setRelatedFiles(newRelatedFiles);
+    setRelatedPreviews(newRelatedPreviews);
+    
+    // Resetta anche l'input file
+    if (relatedFileInputRefs.current[index]) {
+      relatedFileInputRefs.current[index]!.value = "";
+    }
+  };
+  
+  // Funzione per caricare le immagini correlate su Firebase Storage
+  const uploadRelatedImages = async (uuid: string): Promise<string[]> => {
+    const uploadPromises: Promise<string>[] = [];
+    const storage = getStorage(app);
+    
+    // Per ogni immagine correlata, crea un promise di caricamento
+    relatedFiles.forEach((file, index) => {
+      if (file) {
+        const fileExtension = file.name.split('.').pop();
+        const fileRef = storageRef(storage, `articoli/related/${uuid}/related_${index + 1}.${fileExtension}`);
+        
+        const uploadPromise = new Promise<string>((resolve, reject) => {
+          const uploadTask = uploadBytesResumable(fileRef, file);
+          
+          uploadTask.on(
+            'state_changed',
+            () => {
+              // Il progresso può essere gestito qui se necessario
+            },
+            (error) => {
+              console.error(`Errore durante il caricamento dell'immagine correlata ${index + 1}:`, error);
+              reject(error);
+            },
+            async () => {
+              try {
+                const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                resolve(downloadURL);
+              } catch (error) {
+                reject(error);
+              }
+            }
+          );
+        });
+        
+        uploadPromises.push(uploadPromise);
+      }
+    });
+    
+    // Attendi che tutte le immagini correlate siano caricate
+    const urls = await Promise.all(uploadPromises);
+    return urls;
+  };
+  
+  // Modifica la funzione per gestire il toggle del flag sensibile
+  const toggleSensitiveFlag = (index: number) => {
+    const newFlags = [...relatedSensitiveFlags];
+    newFlags[index] = !newFlags[index];
+    setRelatedSensitiveFlags(newFlags);
   };
 
   if (loading) {
@@ -1425,6 +1732,100 @@ export default function ManageArticlesPage() {
                 </div>
               </div>
 
+              {/* Immagini correlate */}
+              <div className="mt-6">
+                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+                  Immagini correlate <span className="text-xs text-zinc-500">(max 3 immagini)</span>
+                  </label>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {[0, 1, 2].map((index) => (
+                    <div key={index} className="relative">
+                  <input
+                        type="file"
+                        ref={el => { relatedFileInputRefs.current[index] = el }}
+                        accept="image/*"
+                        onChange={(e) => handleRelatedFileChange(index, e)}
+                        className="hidden"
+                      />
+                      
+                      {relatedPreviews[index] ? (
+                        <div className="relative h-48 rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-700 shadow-md group">
+                          <img 
+                            src={relatedPreviews[index]!} 
+                            alt={`Immagine correlata ${index + 1}`} 
+                            className={`w-full h-full object-cover transition-all duration-300 ${relatedSensitiveFlags[index] ? 'blur-sm group-hover:blur-none' : ''}`}
+                          />
+                          
+                          {/* Gradient overlay for better text readability */}
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-100 pointer-events-none"></div>
+                          
+                          {/* Buttons for image management */}
+                          <div className="absolute top-2 right-2 flex gap-2">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removeRelatedImage(index);
+                              }}
+                              className="bg-red-500 text-white rounded-full p-1 shadow-lg hover:bg-red-600 transition-colors cursor-pointer"
+                              title="Rimuovi immagine"
+                            >
+                              <FiTrash2 className="h-4 w-4" />
+                            </button>
+              </div>
+
+                          {/* Modern toggle switch for sensitive content */}
+                          <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/90 to-black/40 text-white flex items-center justify-between transition-all duration-300">
+                            <span className="text-xs font-medium">Immagine {index + 1}</span>
+                            
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs">Sensibile</span>
+                <button
+                  type="button"
+                                onClick={() => toggleSensitiveFlag(index)}
+                                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors cursor-pointer ${
+                                  relatedSensitiveFlags[index] ? 'bg-rose-500' : 'bg-zinc-300 dark:bg-zinc-600'
+                                }`}
+                              >
+                  <span
+                                  className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                                    relatedSensitiveFlags[index] ? 'translate-x-5' : 'translate-x-1'
+                                  }`}
+                  />
+                </button>
+                            </div>
+                          </div>
+                          
+                          {/* Badge for sensitive content */}
+                          {relatedSensitiveFlags[index] && (
+                            <div className="absolute top-2 left-2 bg-rose-500 text-white text-xs font-bold px-2 py-1 rounded shadow-md">
+                              SENSIBILE
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        // Mostra l'area di caricamento se non c'è un'immagine
+                        <div 
+                          onClick={() => relatedFileInputRefs.current[index]?.click()}
+                          className="h-48 p-6 bg-white/5 dark:bg-zinc-800/20 border-2 border-dashed border-zinc-300 dark:border-zinc-700 rounded-xl hover:border-amber-500 dark:hover:border-amber-400 transition-all duration-300 cursor-pointer flex flex-col items-center justify-center"
+                        >
+                          <div className="mx-auto h-10 w-10 rounded-full bg-amber-100 dark:bg-amber-900 flex items-center justify-center mb-3">
+                            <FiUpload className="h-5 w-5 text-amber-600 dark:text-amber-300" />
+                          </div>
+                          <p className="text-sm text-zinc-800 dark:text-zinc-300 font-medium text-center">Immagine correlata {index + 1}</p>
+                          <p className="text-xs text-zinc-500 mt-1 text-center">Clicca per caricare</p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                
+                <p className="mt-2 text-xs text-zinc-500">
+                  Le immagini correlate verranno mostrate nella galleria dell&apos;articolo
+                </p>
+              </div>
+
               <div className="flex justify-end gap-4 mt-6">
                 <button
                   onClick={() => setEditingArticle(null)}
@@ -1434,7 +1835,7 @@ export default function ManageArticlesPage() {
                 </button>
                 <button
                   onClick={handleSaveEdit}
-                  className="px-4 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-colors duration-200"
+                  className="px-4 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-colors duration-200 cursor-pointer"
                 >
                   Salva Modifiche
                 </button>
@@ -1978,7 +2379,7 @@ export default function ManageArticlesPage() {
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-purple-600 dark:text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
-              </div>
+          </div>
               <h2 className="text-xl font-serif font-bold text-zinc-900 dark:text-zinc-50 mb-2">
                 Conferma invio in revisione
               </h2>
