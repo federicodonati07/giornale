@@ -2135,15 +2135,3 @@ export default function Article() {
     </motion.main>
   )
 } 
-
-// Add this function to calculate schedule progress percentage
-export function getScheduleProgress(scheduleDate: string): number {
-  const now = new Date();
-  const scheduledTime = new Date(scheduleDate);
-  const creationTime = new Date(now.getTime() - (1000 * 60 * 60 * 24 * 7)); // Assume article was created 7 days ago
-  
-  const totalDuration = scheduledTime.getTime() - creationTime.getTime();
-  const elapsed = now.getTime() - creationTime.getTime();
-  
-  return Math.max(0, Math.min(100, (elapsed / totalDuration) * 100));
-} 

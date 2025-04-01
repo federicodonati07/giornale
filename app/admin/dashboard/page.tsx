@@ -120,7 +120,6 @@ export default function AdminDashboard() {
   const [currentPage, setCurrentPage] = useState(0)
   const usersPerPage = 5
   const [searchTerm, setSearchTerm] = useState("")
-  const [providerFilter, setProviderFilter] = useState<string | null>(null)
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
   
   // User registration data for graph
@@ -247,9 +246,26 @@ export default function AdminDashboard() {
       const totalLikesVal = data.stats?.totalLikes || 0;
       const totalSharesVal = data.stats?.totalShares || 0;
       
-      // Use ALL users from the API
+      // Set all users, not just recent ones
       if (data.users && data.users.length > 0) {
+        // Use ALL users from the API
         setRecentUsers(data.users.map((user: {
+          id: string;
+          displayName?: string;
+          email?: string;
+          createdAt?: string | number;
+          role?: string;
+          provider?: string;
+        }) => ({
+          ...user,
+          displayName: user.displayName || 'Utente senza nome',
+          email: user.email || 'Email non disponibile',
+          createdAt: user.createdAt || new Date().toISOString(),
+          provider: user.provider || 'Email'
+        })));
+      } else if (data.recentUsers && data.recentUsers.length > 0) {
+        // Fallback to recentUsers if users array is not available
+        setRecentUsers(data.recentUsers.map((user: {
           id: string;
           displayName?: string;
           email?: string;
@@ -455,15 +471,6 @@ export default function AdminDashboard() {
         const nameMatch = user.displayName?.toLowerCase().includes(searchTermLower);
         const emailMatch = user.email?.toLowerCase().includes(searchTermLower);
         if (!nameMatch && !emailMatch) return false;
-      }
-      
-      // Filter by provider
-      if (providerFilter === "google") {
-        return user.provider === "google.com";
-      } else if (providerFilter === "github") {
-        return user.provider === "github.com";
-      } else if (providerFilter === "email") {
-        return user.provider === "password";
       }
       
       return true;
@@ -704,62 +711,6 @@ export default function AdminDashboard() {
                 </svg>
               </div>
               
-              {/* Filter By Provider */}
-              <div className="inline-flex rounded-md shadow-sm">
-                <button
-                  onClick={() => {
-                    setProviderFilter(null);
-                    setCurrentPage(0);
-                  }}
-                  className={`px-3 py-2 text-xs font-medium rounded-l-lg cursor-pointer ${
-                    providerFilter === null 
-                    ? 'bg-indigo-600 text-white dark:bg-indigo-500' 
-                    : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-600'
-                  } border border-zinc-200 dark:border-zinc-600`}
-                >
-                  Tutti
-                </button>
-                <button
-                  onClick={() => {
-                    setProviderFilter("google");
-                    setCurrentPage(0);
-                  }}
-                  className={`px-3 py-2 text-xs font-medium cursor-pointer ${
-                    providerFilter === "google" 
-                    ? 'bg-indigo-600 text-white dark:bg-indigo-500' 
-                    : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-600'
-                  } border-t border-b border-r border-zinc-200 dark:border-zinc-600`}
-                >
-                  Google
-                </button>
-                <button
-                  onClick={() => {
-                    setProviderFilter("github");
-                    setCurrentPage(0);
-                  }}
-                  className={`px-3 py-2 text-xs font-medium cursor-pointer ${
-                    providerFilter === "github" 
-                    ? 'bg-indigo-600 text-white dark:bg-indigo-500' 
-                    : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-600'
-                  } border-t border-b border-r border-zinc-200 dark:border-zinc-600`}
-                >
-                  GitHub
-                </button>
-                <button
-                  onClick={() => {
-                    setProviderFilter("email");
-                    setCurrentPage(0);
-                  }}
-                  className={`px-3 py-2 text-xs font-medium rounded-r-lg cursor-pointer ${
-                    providerFilter === "email" 
-                    ? 'bg-indigo-600 text-white dark:bg-indigo-500' 
-                    : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-600'
-                  } border-t border-b border-r border-zinc-200 dark:border-zinc-600`}
-                >
-                  Email
-                </button>
-              </div>
-              
               {/* Sort Order */}
               <button
                 onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
@@ -779,14 +730,9 @@ export default function AdminDashboard() {
             </div>
             
             {/* Filter statistics */}
-            {(searchTerm || providerFilter) && (
+            {searchTerm && (
               <div className="text-xs text-zinc-500 dark:text-zinc-400">
-                Risultati: {filteredUsers.length} utenti {providerFilter && `(${
-                  providerFilter === "google" ? "Google" : 
-                  providerFilter === "github" ? "GitHub" : 
-                  "Email"
-                })`}
-                {searchTerm && ` cercando "${searchTerm}"`}
+                Risultati: {filteredUsers.length} utenti cercando &quot;{searchTerm}&quot;
               </div>
             )}
           </div>
@@ -842,13 +788,6 @@ export default function AdminDashboard() {
                                   <div className="font-medium text-zinc-900 dark:text-zinc-100">{user.displayName || 'Utente'}</div>
                                   <div className="text-xs text-zinc-500 dark:text-zinc-400">
                                     {user.role || 'utente'} 
-                                    {user.provider && (
-                                      <span className="ml-1 inline-flex items-center rounded-full bg-blue-100 dark:bg-blue-900/30 px-2 py-0.5 text-xs font-medium text-blue-800 dark:text-blue-300">
-                                        {user.provider === "google.com" ? "Google" : 
-                                         user.provider === "github.com" ? "GitHub" : 
-                                         user.provider === "password" ? "Email" : user.provider}
-                                      </span>
-                                    )}
                                   </div>
                                 </div>
                               </div>
@@ -890,21 +829,9 @@ export default function AdminDashboard() {
                     Precedente
                   </button>
                   
-                  <div className="flex items-center space-x-1">
-                    {Array.from({ length: Math.ceil(filteredUsers.length / usersPerPage) }, (_, i) => (
-                      <button
-                        key={i}
-                        onClick={() => setCurrentPage(i)}
-                        className={`px-3 py-2 text-sm font-medium rounded-md cursor-pointer ${
-                          currentPage === i
-                            ? 'bg-indigo-600 text-white dark:bg-indigo-500'
-                            : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700/50'
-                        }`}
-                      >
-                        {i + 1}
-                      </button>
-                    ))}
-                  </div>
+                  <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                    Pagina {currentPage + 1} di {Math.ceil(filteredUsers.length / usersPerPage)}
+                  </span>
                   
                   <button
                     onClick={() => setCurrentPage(prev => Math.min(Math.ceil(filteredUsers.length / usersPerPage) - 1, prev + 1))}
