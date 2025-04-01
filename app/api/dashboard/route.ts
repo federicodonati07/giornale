@@ -42,7 +42,7 @@ export async function GET() {
       // Tenta di arricchire i dati degli utenti con informazioni dal database
       // Cerca in diverse posizioni nel database
       const paths = ["utenti", "users", "user"];
-      const userDbData = {};
+      const userDbData: Record<string, any> = {};
 
       for (const path of paths) {
         console.log(`Checking ${path} path for additional user data...`);
