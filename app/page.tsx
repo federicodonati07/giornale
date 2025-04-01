@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { Button } from "@heroui/react"
-import { FiHeart, FiUser, FiLogOut, FiPlus, FiChevronDown, FiList, FiInstagram, FiEdit } from "react-icons/fi"
+import { FiHeart, FiUser, FiLogOut, FiPlus, FiChevronDown, FiList, FiInstagram, FiEdit, FiEye, FiShare2, FiUsers, FiFile, FiPieChart } from "react-icons/fi"
 import { FeaturedNews } from "./components/FeaturedNews"
 import Link from "next/link"
 import { onAuthStateChanged, signOut, User } from "firebase/auth"
@@ -21,9 +21,19 @@ export default function Home() {
   const [displayCount, setDisplayCount] = useState(0);
   const animationRef = useRef<number | null>(null);
 
-  // Add a new state for total views
+  // States for counters
   const [displayTotalViews, setDisplayTotalViews] = useState(0);
   const totalViewsAnimationRef = useRef<number | null>(null);
+  
+  const [displayTotalLikes, setDisplayTotalLikes] = useState(0);
+  const totalLikesAnimationRef = useRef<number | null>(null);
+  
+  // Add state for total shares
+  const [displayTotalShares, setDisplayTotalShares] = useState(0);
+  const totalSharesAnimationRef = useRef<number | null>(null);
+
+  // Add state for articles submenu
+  const [showArticlesSubmenu, setShowArticlesSubmenu] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -327,6 +337,118 @@ export default function Home() {
     };
   }, []);
 
+  // Add this function to animate the total likes counter
+  const animateTotalLikes = (start: number, end: number, duration: number) => {
+    const startTime = performance.now();
+    
+    const updateTotalLikes = (currentTime: number) => {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      
+      // Easing function for smooth animation
+      const easeOutQuart = 1 - Math.pow(1 - progress, 4);
+      const currentCount = Math.floor(start + (end - start) * easeOutQuart);
+      
+      setDisplayTotalLikes(currentCount);
+      
+      if (progress < 1) {
+        totalLikesAnimationRef.current = requestAnimationFrame(updateTotalLikes);
+      }
+    };
+    
+    totalLikesAnimationRef.current = requestAnimationFrame(updateTotalLikes);
+  };
+
+  // Add a useEffect to fetch total likes
+  useEffect(() => {
+    const fetchTotalLikes = async () => {
+      try {
+        const articlesRef = ref(db, 'articoli');
+        const snapshot = await get(articlesRef);
+        
+        if (snapshot.exists()) {
+          let totalLikes = 0;
+          
+          snapshot.forEach((childSnapshot) => {
+            const article = childSnapshot.val();
+            totalLikes += article.upvote || 0;
+          });
+          
+          animateTotalLikes(0, totalLikes, 2000);
+        } else {
+          animateTotalLikes(0, 0, 2000);
+        }
+      } catch (error) {
+        console.error("Errore nel recupero dei like totali:", error);
+        animateTotalLikes(0, 0, 2000);
+      }
+    };
+    
+    fetchTotalLikes();
+    
+    return () => {
+      if (totalLikesAnimationRef.current) {
+        cancelAnimationFrame(totalLikesAnimationRef.current);
+      }
+    };
+  }, []);
+
+  // Add this function to animate the total shares counter
+  const animateTotalShares = (start: number, end: number, duration: number) => {
+    const startTime = performance.now();
+    
+    const updateTotalShares = (currentTime: number) => {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      
+      // Easing function for smooth animation
+      const easeOutQuart = 1 - Math.pow(1 - progress, 4);
+      const currentCount = Math.floor(start + (end - start) * easeOutQuart);
+      
+      setDisplayTotalShares(currentCount);
+      
+      if (progress < 1) {
+        totalSharesAnimationRef.current = requestAnimationFrame(updateTotalShares);
+      }
+    };
+    
+    totalSharesAnimationRef.current = requestAnimationFrame(updateTotalShares);
+  };
+
+  // Add a useEffect to fetch total shares
+  useEffect(() => {
+    const fetchTotalShares = async () => {
+      try {
+        const articlesRef = ref(db, 'articoli');
+        const snapshot = await get(articlesRef);
+        
+        if (snapshot.exists()) {
+          let totalShares = 0;
+          
+          snapshot.forEach((childSnapshot) => {
+            const article = childSnapshot.val();
+            totalShares += article.shared || 0;
+          });
+          
+          animateTotalShares(0, totalShares, 2000);
+        } else {
+          animateTotalShares(0, 0, 2000);
+        }
+      } catch (error) {
+        console.error("Errore nel recupero delle condivisioni totali:", error);
+        animateTotalShares(0, 0, 2000);
+      }
+    };
+    
+    fetchTotalShares();
+    
+    return () => {
+      if (totalSharesAnimationRef.current) {
+        cancelAnimationFrame(totalSharesAnimationRef.current);
+      }
+    };
+  }, []);
+
   return (
     <main className="min-h-screen bg-gradient-to-br from-zinc-100 to-zinc-200/90 dark:from-zinc-900 dark:to-zinc-800 overflow-x-hidden">
       {/* Stili per l'animazione del menu e animazioni personalizzate */}
@@ -421,33 +543,76 @@ export default function Home() {
                 </div>
                 {isAdmin && (
                   <div className="px-2">
+                    {/* Show Add Article button only for admins who are not superior */}
+                    {!isSuperior && (
                     <Link href="/admin/new-article">
                       <div className="flex items-center px-3 py-2 text-sm text-zinc-800 dark:text-zinc-200 hover:bg-blue-500/10 hover:text-blue-500 rounded-lg transition-all duration-300 cursor-pointer">
                         <FiPlus className="mr-2 h-4 w-4" />
                         Aggiungi Articolo
                       </div>
                     </Link>
+                    )}
                     {isSuperior && (
                       <>
-                        <Link href="/admin/manage-articles">
-                          <div className="flex items-center px-3 py-2 text-sm text-zinc-800 dark:text-zinc-200 hover:bg-blue-500/10 hover:text-blue-500 rounded-lg transition-all duration-300 cursor-pointer">
-                            <FiList className="mr-2 h-4 w-4" />
-                            Gestisci Articoli
+                        {/* Dashboard as a separate menu item */}
+                        <Link href="/admin/dashboard">
+                          <div className="flex items-center px-3 py-2 text-sm text-zinc-800 dark:text-zinc-200 hover:bg-amber-300/10 hover:text-amber-400 rounded-lg transition-all duration-300 cursor-pointer">
+                            <FiPieChart className="mr-2 h-4 w-4" />
+                            Dashboard
                           </div>
                         </Link>
-                        <Link href="/admin/review-articles">
-                          <div className="relative flex items-center px-3 py-2 text-sm text-zinc-800 dark:text-zinc-200 hover:bg-purple-500/10 hover:text-purple-500 rounded-lg transition-all duration-300 cursor-pointer">
-                            <FiEdit className="mr-2 h-4 w-4" />
-                            <span>Revisione Articoli</span>
-                            
-                            {/* Badge posizionato all'estrema destra */}
-                            {pendingReviewCount > 0 && (
-                              <div className="absolute right-2 h-5 w-5 bg-red-500 rounded-full flex items-center justify-center shadow-lg border border-white/20">
-                                <span className="text-white text-xs font-bold">{pendingReviewCount > 9 ? '9+' : pendingReviewCount}</span>
+                        
+                        {/* Articoli parent menu with submenu */}
+                        <div 
+                          className="relative flex items-center justify-between px-3 py-2 text-sm text-zinc-800 dark:text-zinc-200 hover:bg-emerald-500/10 hover:text-emerald-500 rounded-lg transition-all duration-300 cursor-pointer"
+                          onClick={() => setShowArticlesSubmenu(!showArticlesSubmenu)}
+                        >
+                          <div className="flex items-center">
+                            <FiFile className="mr-2.5 h-4 w-4" />
+                            <span>Articoli</span>
+                          </div>
+                          
+                          {/* Badge for pending reviews */}
+                          {pendingReviewCount > 0 && (
+                            <div className="h-5 w-5 bg-red-500 rounded-full flex items-center justify-center shadow-lg border border-white/20">
+                              <span className="text-white text-xs font-bold">{pendingReviewCount > 9 ? '9+' : pendingReviewCount}</span>
+                            </div>
+                          )}
+                          
+                          {/* Dropdown arrow */}
+                          <FiChevronDown className={`ml-1.5 h-3 w-3 text-zinc-500 transition-transform duration-300 ${showArticlesSubmenu ? 'rotate-180' : ''}`} />
+                        </div>
+                        
+                        {/* Submenu for articles management */}
+                        {showArticlesSubmenu && (
+                          <div className="ml-2 mt-1 border-l-2 border-white/30 dark:border-white/10 pl-2">
+                            <Link href="/admin/new-article">
+                              <div className="flex items-center px-2.5 py-2 text-sm text-zinc-800 dark:text-zinc-200 hover:bg-sky-500/10 hover:text-sky-500 rounded-lg transition-all duration-300 cursor-pointer">
+                                <FiPlus className="mr-2 h-4 w-4" />
+                                Aggiungi Articolo
                               </div>
-                            )}
+                            </Link>
+                            <Link href="/admin/manage-articles">
+                              <div className="flex items-center px-2.5 py-2 text-sm text-zinc-800 dark:text-zinc-200 hover:bg-rose-500/10 hover:text-rose-500 rounded-lg transition-all duration-300 cursor-pointer">
+                                <FiList className="mr-2 h-4 w-4" />
+                                Gestione Articoli
+                              </div>
+                            </Link>
+                            <Link href="/admin/review-articles">
+                              <div className="flex items-center justify-between px-2.5 py-2 text-sm text-zinc-800 dark:text-zinc-200 hover:bg-purple-500/10 hover:text-purple-500 rounded-lg transition-all duration-300 cursor-pointer">
+                                <div className="flex items-center">
+                                  <FiEdit className="mr-2 h-4 w-4" />
+                                  <span className="mr-2">Revisione Articoli</span>
+                                </div>
+                                {pendingReviewCount > 0 && (
+                                  <div className="inline-flex h-5 w-5 bg-red-500 rounded-full items-center justify-center shadow-lg border border-white/20">
+                                    <span className="text-white text-xs font-bold">{pendingReviewCount > 9 ? '9+' : pendingReviewCount}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </Link>
                           </div>
-                        </Link>
+                        )}
                       </>
                     )}
                     <div className="my-1 border-t border-zinc-200 dark:border-zinc-700"></div>
@@ -501,30 +666,142 @@ export default function Home() {
             </h1>
           </motion.div>
 
-          {/* User Counter with animation */}
+          {/* Stats Counters with ultra-modern UI */}
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 1, delay: 0.5 }}
             className="flex flex-col items-center space-y-3"
           >
-            <div className="flex items-baseline gap-2 text-zinc-500 dark:text-zinc-400">
-              <span className="font-medium text-base text-amber-500">
+            {/* Desktop layout - separate containers */}
+            <div className="hidden md:block w-full">
+              {/* Community/Users count with premium design */}
+              <motion.div 
+                whileHover={{ y: -3 }}
+                transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                className="flex items-center justify-center bg-gradient-to-br from-amber-500/10 to-amber-600/5 dark:from-amber-400/10 dark:to-amber-700/5 backdrop-blur-md px-7 py-3 rounded-2xl border border-amber-200/20 dark:border-amber-500/10 shadow-lg shadow-amber-500/5 mb-3"
+              >
+                <div className="flex items-center">
+                  <div className="relative">
+                    <div className="absolute -inset-1 bg-amber-400/20 rounded-full blur-md"></div>
+                    <div className="relative bg-gradient-to-br from-amber-300 to-amber-500 p-2 rounded-full">
+                      <FiUsers className="text-white h-5 w-5" />
+                    </div>
+                  </div>
+                  <div className="ml-3 pl-3 border-l border-amber-200/20 dark:border-amber-500/20">
+                    <span className="block font-bold text-xl text-zinc-800 dark:text-zinc-100">
                 {displayCount.toLocaleString()}
               </span>
-              <span className="text-sm">
-                utenti registrati
+                    <span className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">community</span>
+                  </div>
+                </div>
+              </motion.div>
+              
+              {/* Content stats in separate boxes */}
+              <div className="grid grid-cols-3 gap-3">
+                {/* Views stat in its own box */}
+                <motion.div 
+                  whileHover={{ y: -3 }}
+                  transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                  className="flex items-center justify-center bg-gradient-to-br from-blue-500/10 to-blue-600/5 dark:from-blue-400/10 dark:to-blue-700/5 backdrop-blur-md px-5 py-3 rounded-2xl border border-blue-200/20 dark:border-blue-500/10 shadow-lg shadow-blue-500/5"
+                >
+                  <div className="flex flex-col items-center">
+                    <div className="relative mb-1">
+                      <div className="absolute -inset-1 bg-blue-400/20 rounded-full blur-md"></div>
+                      <div className="relative bg-gradient-to-br from-blue-400 to-blue-600 p-2 rounded-full">
+                        <FiEye className="text-white h-5 w-5" />
+                      </div>
+                    </div>
+                    <span className="block font-bold text-lg text-zinc-800 dark:text-zinc-100 mt-1">
+                      {displayTotalViews.toLocaleString()}
+                    </span>
+                    <span className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">views</span>
+                  </div>
+                </motion.div>
+                
+                {/* Likes stat in its own box */}
+                <motion.div 
+                  whileHover={{ y: -3 }}
+                  transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                  className="flex items-center justify-center bg-gradient-to-br from-rose-500/10 to-rose-600/5 dark:from-rose-400/10 dark:to-rose-700/5 backdrop-blur-md px-5 py-3 rounded-2xl border border-rose-200/20 dark:border-rose-500/10 shadow-lg shadow-rose-500/5"
+                >
+                  <div className="flex flex-col items-center">
+                    <div className="relative mb-1">
+                      <div className="absolute -inset-1 bg-rose-400/20 rounded-full blur-md"></div>
+                      <div className="relative bg-gradient-to-br from-rose-400 to-rose-600 p-2 rounded-full">
+                        <FiHeart className="text-white h-5 w-5" />
+                      </div>
+                    </div>
+                    <span className="block font-bold text-lg text-zinc-800 dark:text-zinc-100 mt-1">
+                      {displayTotalLikes.toLocaleString()}
+                    </span>
+                    <span className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">likes</span>
+                  </div>
+                </motion.div>
+                
+                {/* Shares stat in its own box */}
+                <motion.div 
+                  whileHover={{ y: -3 }}
+                  transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                  className="flex items-center justify-center bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 dark:from-emerald-400/10 dark:to-emerald-700/5 backdrop-blur-md px-5 py-3 rounded-2xl border border-emerald-200/20 dark:border-emerald-500/10 shadow-lg shadow-emerald-500/5"
+                >
+                  <div className="flex flex-col items-center">
+                    <div className="relative mb-1">
+                      <div className="absolute -inset-1 bg-emerald-400/20 rounded-full blur-md"></div>
+                      <div className="relative bg-gradient-to-br from-emerald-400 to-emerald-600 p-2 rounded-full">
+                        <FiShare2 className="text-white h-5 w-5" />
+                      </div>
+                    </div>
+                    <span className="block font-bold text-lg text-zinc-800 dark:text-zinc-100 mt-1">
+                      {displayTotalShares.toLocaleString()}
               </span>
+                    <span className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">shares</span>
+                  </div>
+                </motion.div>
+              </div>
             </div>
             
-            {/* Total Views Counter */}
-            <div className="flex items-baseline gap-2 text-zinc-500 dark:text-zinc-400">
-              <span className="font-medium text-base text-amber-500">
+            {/* Mobile layout - 1x2 grid with individual boxes */}
+            <div className="md:hidden w-full grid grid-cols-2 gap-2">
+              {/* Community stat in its own box */}
+              <motion.div 
+                whileHover={{ y: -2 }}
+                transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                className="flex items-center justify-center bg-gradient-to-br from-amber-500/10 to-amber-600/5 dark:from-amber-400/10 dark:to-amber-700/5 backdrop-blur-md p-3 rounded-2xl border border-amber-200/20 dark:border-amber-500/10 shadow-lg shadow-amber-500/5"
+              >
+                <div className="flex flex-col items-center">
+                  <div className="relative mb-1">
+                    <div className="absolute -inset-1 bg-amber-400/20 rounded-full blur-md"></div>
+                    <div className="relative bg-gradient-to-br from-amber-300 to-amber-500 p-1.5 rounded-full">
+                      <FiUsers className="text-white h-4 w-4" />
+                    </div>
+                  </div>
+                  <span className="font-bold text-sm text-zinc-800 dark:text-zinc-100 mt-1">
+                    {displayCount.toLocaleString()}
+                  </span>
+                  <span className="text-[10px] font-medium text-zinc-600 dark:text-zinc-400">community</span>
+                </div>
+              </motion.div>
+              
+              {/* Views stat in its own box */}
+              <motion.div 
+                whileHover={{ y: -2 }}
+                transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                className="flex items-center justify-center bg-gradient-to-br from-blue-500/10 to-blue-600/5 dark:from-blue-400/10 dark:to-blue-700/5 backdrop-blur-md p-3 rounded-2xl border border-blue-200/20 dark:border-blue-500/10 shadow-lg shadow-blue-500/5"
+              >
+                <div className="flex flex-col items-center">
+                  <div className="relative mb-1">
+                    <div className="absolute -inset-1 bg-blue-400/20 rounded-full blur-md"></div>
+                    <div className="relative bg-gradient-to-br from-blue-400 to-blue-600 p-1.5 rounded-full">
+                      <FiEye className="text-white h-4 w-4" />
+                    </div>
+                  </div>
+                  <span className="font-bold text-sm text-zinc-800 dark:text-zinc-100 mt-1">
                 {displayTotalViews.toLocaleString()}
               </span>
-              <span className="text-sm">
-                visualizzazioni totali
-              </span>
+                  <span className="text-[10px] font-medium text-zinc-600 dark:text-zinc-400">views</span>
+                </div>
+              </motion.div>
             </div>
           </motion.div>
           

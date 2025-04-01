@@ -36,6 +36,8 @@ interface ArticleData {
   secondaryNotes?: Array<{ id: string, content: string }>
   status?: string
   scheduleDate?: string
+  relatedImages?: string[]
+  sensitiveTags?: string[]
 }
 
 export default function Article() {
@@ -69,6 +71,13 @@ export default function Article() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [isSuperior, setIsSuperior] = useState(false)
   const [confirmAction, setConfirmAction] = useState<{ action: 'reject' | 'accept' } | null>(null)
+  
+  // Add state for image gallery
+  const [showImageConfirmation, setShowImageConfirmation] = useState<number | null>(null)
+  const [unblurredImages, setUnblurredImages] = useState<number[]>([])
+
+  // Add state for managing the image modal
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
   // Definisci useRef al livello più alto del componente
   const hasRunViewCount = useRef(false);
@@ -122,6 +131,69 @@ export default function Article() {
     }
   }, [params.id]);
 
+  // Add separate useEffect for view counting to control when views are incremented
+  const viewCounted = useRef(false);
+
+  useEffect(() => {
+    // Skip view counting if not needed
+    if (!article || viewCounted.current) {
+      return;
+    }
+    
+    // Don't count views for private articles if user is not authenticated
+    if (article.isPrivate && !user) {
+      return;
+    }
+    
+    const incrementViewCount = async () => {
+      try {
+        // Mark as counted to prevent multiple counts
+        viewCounted.current = true;
+        
+        // Store in session to prevent counts on page refresh
+        if (typeof window !== 'undefined' && article.uuid) {
+          sessionStorage.setItem(`viewed_${article.uuid}`, 'true');
+        }
+        
+        // Update the view count in the database
+        if (article.uuid) {
+          const articleRef = ref(db, `articoli/${article.uuid}`);
+          await update(articleRef, {
+            view: increment(1)
+          });
+          
+          // Update local state
+          setArticle(prev => {
+            if (!prev) return null;
+            return {
+              ...prev,
+              view: (prev.view || 0) + 1
+            };
+          });
+          
+          console.log('Visualizzazione articolo registrata: +1');
+        }
+      } catch (error) {
+        console.error("Errore nell'aggiornamento delle visualizzazioni:", error);
+      }
+    };
+    
+    // Only count the view if it hasn't been counted in this session
+    const alreadyCounted = typeof window !== 'undefined' && article.uuid &&
+      sessionStorage.getItem(`viewed_${article.uuid}`);
+    
+    if (!alreadyCounted) {
+      incrementViewCount();
+    } else {
+      viewCounted.current = true;
+    }
+    
+    // Cleanup
+    return () => {
+      // Reset on unmount in case the component is remounted
+    };
+  }, [article, user]); // Include user in dependencies to respond to authentication changes
+
   // Verifica se l'utente ha già messo like quando carica l'articolo
   useEffect(() => {
     if (user && article?.likes) {
@@ -147,28 +219,28 @@ export default function Article() {
   // Modifica l'useEffect per il conteggio delle visualizzazioni da condivisione
   useEffect(() => {
     const countSharedView = async () => {
-      // Verifica se possiamo incrementare la visualizzazione
+      // Skip if:
+      // 1. View has already been counted
+      // 2. Not a shared view
+      // 3. Article is private and user is not authenticated
       if (
         !hasRunViewCount.current && 
         typeof window !== 'undefined' && 
         window.location.search.includes('shared=true') && 
         article?.uuid && 
-        !sessionStorage.getItem(`shared_view_counted_${article.uuid}`)
+        !sessionStorage.getItem(`shared_view_counted_${article.uuid}`) &&
+        !(article?.isPrivate && !user) // Skip if article is private and user is not authenticated
       ) {
-        // Impostiamo subito il flag per evitare esecuzioni multiple
         hasRunViewCount.current = true;
         
         try {
-          // Marchiamo immediatamente come conteggiata
           sessionStorage.setItem(`shared_view_counted_${article.uuid}`, 'true');
           
-          // Incrementa il contatore sul database (esattamente +1)
           const articleRef = ref(db, `articoli/${article.uuid}`);
           await update(articleRef, {
             view: increment(1)
           });
           
-          // Aggiorniamo lo stato locale (esattamente +1)
           setArticle(prev => {
             if (!prev) return null;
             return {
@@ -177,7 +249,7 @@ export default function Article() {
             };
           });
           
-          // Rimuovi il parametro dall'URL senza ricaricare la pagina
+          // Remove the parameter from the URL without reloading the page
           const newUrl = window.location.pathname;
           window.history.replaceState({}, document.title, newUrl);
           
@@ -188,16 +260,14 @@ export default function Article() {
       }
     };
     
-    // Esegui solo quando l'articolo è caricato
     if (article) {
       countSharedView();
     }
     
-    // Funzione di pulizia che viene eseguita quando il componente si smonta
     return () => {
       hasRunViewCount.current = false;
     };
-  }, [article]);
+  }, [article, user]); // Add user to dependencies
 
   const handleLike = async () => {
     if (!user) {
@@ -479,6 +549,131 @@ export default function Article() {
     );
   }
 
+  // Check if the article is private and user is not authenticated
+  if (article.isPrivate && !user) {
+    return (
+      <>
+        {/* Contenuto articolo blurrato in background */}
+        <div className="relative w-full">
+          <div className="absolute inset-0 blur-xl filter pointer-events-none overflow-hidden">
+            {/* Titolo blurrato */}
+            <motion.h1 
+              className="font-serif text-4xl sm:text-5xl md:text-6xl font-bold text-zinc-800 dark:text-zinc-200 mb-8 opacity-50"
+            >
+              {article.titolo}
+            </motion.h1>
+            
+            {/* Contenuto blurrato */}
+            <div className="prose prose-lg md:prose-xl dark:prose-invert opacity-30 max-w-none">
+              <div dangerouslySetInnerHTML={{ __html: article.contenuto }} />
+            </div>
+            
+            {/* Elementi decorativi blurrati */}
+            <div className="w-20 h-20 rounded-full bg-amber-400/20 absolute top-1/4 left-1/4 -translate-x-1/2 -translate-y-1/2"></div>
+            <div className="w-40 h-40 rounded-full bg-amber-400/10 absolute bottom-1/3 right-1/4 translate-x-1/2 translate-y-1/2"></div>
+          </div>
+        </div>
+        
+        {/* Overlay di privacy */}
+        <div className="absolute inset-0 backdrop-blur-lg bg-zinc-900/80 flex items-center justify-center p-4 z-50">
+          <motion.div
+            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.5, ease: "easeOut" }}
+            className="w-full max-w-md bg-gradient-to-br from-zinc-800 to-zinc-900 border border-zinc-700/50 rounded-2xl shadow-2xl overflow-hidden"
+          >
+            <div className="relative p-8">
+              {/* Background decorative elements */}
+              <div className="absolute top-0 right-0 w-40 h-40 bg-amber-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3"></div>
+              <div className="absolute bottom-0 left-0 w-40 h-40 bg-amber-500/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/3"></div>
+              
+              <div className="flex flex-col items-center text-center relative z-10">
+                <motion.div
+                  initial={{ scale: 0.8, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ delay: 0.2, duration: 0.5 }}
+                  className="w-24 h-24 bg-gradient-to-br from-amber-500 to-amber-600 rounded-full flex items-center justify-center mb-7 shadow-lg shadow-amber-500/20"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                </motion.div>
+                
+                <motion.h2
+                  initial={{ y: 10, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{ delay: 0.3, duration: 0.5 }}
+                  className="text-3xl font-bold text-white mb-3"
+                >
+                  Contenuto esclusivo
+                </motion.h2>
+                
+                <motion.p
+                  initial={{ y: 10, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{ delay: 0.4, duration: 0.5 }}
+                  className="text-zinc-300 mb-10 max-w-sm"
+                >
+                  Questo articolo è riservato agli utenti registrati. Accedi per visualizzarlo.
+                </motion.p>
+                
+                <div className="flex flex-col items-center w-full">
+                  <motion.div
+                    initial={{ y: 10, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    transition={{ delay: 0.5, duration: 0.5 }}
+                    whileHover={{ scale: 1.03 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="w-full"
+                  >
+                    <button
+                      onClick={() => router.push('/access')}
+                      className="w-full px-6 py-3.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white rounded-xl font-medium shadow-lg hover:shadow-amber-500/30 transition-all duration-300 flex items-center justify-center cursor-pointer"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+                      </svg>
+                      Accedi per visualizzare l&apos;articolo
+                    </button>
+                  </motion.div>
+                  
+                  <motion.div
+                    initial={{ y: 10, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    transition={{ delay: 0.6, duration: 0.5 }}
+                    className="mt-6"
+                  >
+                    <span
+                      onClick={() => router.push('/articles')}
+                      className="text-zinc-400 hover:text-amber-400 transition-colors duration-300 cursor-pointer text-sm flex items-center gap-1"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                      </svg>
+                      Torna agli articoli
+                    </span>
+                  </motion.div>
+                </div>
+                
+                {/* Indicatore visuale di contenuto bloccato */}
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.7, duration: 0.5 }}
+                  className="mt-8 flex items-center justify-center"
+                >
+                  <div className="h-0.5 w-16 bg-zinc-700"></div>
+                  <div className="mx-4 text-zinc-500 text-xs uppercase tracking-wider font-medium">Contenuto protetto</div>
+                  <div className="h-0.5 w-16 bg-zinc-700"></div>
+                </motion.div>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      </>
+    );
+  }
+
   if (article.status !== 'accepted' && (!isAdmin || (isAdmin && article.status !== 'revision'))) {
     const getStatusIcon = () => {
       switch (article.status) {
@@ -640,23 +835,41 @@ export default function Article() {
               </button>
             </motion.div>
             
-            {article.status === 'scheduled' && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.7, duration: 0.5 }}
-                className="mt-6 w-full"
+            {article.status === 'scheduled' && (isSuperior || isAdmin) && (
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.3 }}
+                className="bg-purple-500/20 border border-purple-500/30 rounded-xl p-4 mb-4 flex items-center justify-between"
               >
-                <div className="w-full bg-zinc-700/30 rounded-full h-2 overflow-hidden">
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ 
-                      width: `${Math.min(100, getScheduleProgress(article.scheduleDate || ''))}%` 
-                    }}
-                    transition={{ delay: 0.8, duration: 1, ease: "easeOut" }}
-                    className="h-full bg-gradient-to-r from-blue-500 to-cyan-400"
-                  />
-              </div>
+                <div className="flex items-center">
+                  <div className="h-8 w-8 bg-purple-500 rounded-full flex items-center justify-center mr-3">
+                    <FiEye className="h-4 w-4 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-purple-100">Articolo in revisione</h3>
+                    <p className="text-sm text-purple-200/70">Questo articolo non è ancora pubblicato e richiede approvazione.</p>
+                  </div>
+                </div>
+                
+                {isSuperior && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setConfirmAction({ action: 'reject' })}
+                      className="p-2 rounded-xl bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-800/50 transition-colors duration-200 cursor-pointer"
+                      title="Rifiuta articolo"
+                    >
+                      <FiX className="h-5 w-5" />
+                    </button>
+                    <button
+                      onClick={() => setConfirmAction({ action: 'accept' })}
+                      className="p-2 rounded-xl bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-800/50 transition-colors duration-200 cursor-pointer"
+                      title="Approva articolo"
+                    >
+                      <FiCheck className="h-5 w-5" />
+                    </button>
+                  </div>
+                )}
               </motion.div>
             )}
             </div>
@@ -875,6 +1088,36 @@ export default function Article() {
     article?.contenuto || '', 
     article?.additionalLinks
   );
+
+  // Add function to check if an image is sensitive
+  const isImageSensitive = (index: number): boolean => {
+    if (!article?.sensitiveTags) return false;
+    return article.sensitiveTags.includes(`related_${index + 1}`);
+  }
+  
+  // Add function to handle image click
+  const handleImageClick = (index: number) => {
+    if (isImageSensitive(index) && !unblurredImages.includes(index)) {
+      // Show confirmation popup for sensitive images
+      setShowImageConfirmation(index);
+    }
+  }
+  
+  // Add function to confirm viewing sensitive image
+  const confirmViewSensitiveImage = (index: number) => {
+    setUnblurredImages(prev => [...prev, index]);
+    setShowImageConfirmation(null);
+  }
+
+  // Function to open the image modal
+  const openImageModal = (imageUrl: string) => {
+    setSelectedImage(imageUrl);
+  };
+
+  // Function to close the image modal
+  const closeImageModal = () => {
+    setSelectedImage(null);
+  };
 
   // Aggiungi un componente semplificato per il modale di condivisione
   const ShareModal = () => {
@@ -1532,6 +1775,141 @@ export default function Article() {
             }}
           />
 
+          {/* Related Images Gallery */}
+          {article?.relatedImages && article.relatedImages.length > 0 && (
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.9 }}
+              className="mt-12 mb-12 border-t border-zinc-700 pt-8"
+            >
+              <h3 className="text-xl font-medium text-zinc-100 mb-8 flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                Galleria immagini
+              </h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {article.relatedImages.map((imageUrl, index) => {
+                  const isSensitive = isImageSensitive(index);
+                  const isUnblurred = unblurredImages.includes(index);
+                  
+                  return (
+                    <motion.div 
+                      key={index}
+                      whileHover={{ 
+                        y: -8,
+                        boxShadow: "0 25px 35px -12px rgba(0,0,0,0.6)" 
+                      }}
+                      className={`relative aspect-[4/3] rounded-xl overflow-hidden border border-zinc-700/50 
+                                  ${isSensitive ? 'group cursor-pointer' : 'cursor-pointer'}`} // Ensure cursor-pointer is applied
+                      onClick={() => {
+                        if (isSensitive && !isUnblurred) {
+                          handleImageClick(index);
+                        } else {
+                          openImageModal(imageUrl);
+                        }
+                      }}
+                    >
+                      <div className="absolute inset-0 w-full h-full">
+                        <Image
+                          src={imageUrl}
+                          alt={`Immagine correlata ${index + 1}`}
+                          fill
+                          className={`object-cover transition-all duration-500 
+                                    ${isSensitive && !isUnblurred ? 'blur-md scale-105' : 'hover:scale-110'}`}
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.src = '/placeholder-image.jpg';
+                          }}
+                        />
+                      </div>
+                      
+                      {/* Gradient overlay for better readability */}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                      
+                      {/* Sensitive badge */}
+                      {isSensitive && (
+                        <div className="absolute top-4 left-4 bg-rose-600 text-white text-sm font-bold px-3 py-1.5 rounded-lg shadow-lg">
+                          SENSIBILE
+                        </div>
+                      )}
+                      
+                      {/* Click to view message for sensitive content */}
+                      {isSensitive && !isUnblurred && (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <motion.button
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.98 }}
+                            className="bg-black/70 backdrop-blur-md text-white px-5 py-3 rounded-xl text-base 
+                                      shadow-xl border border-white/10 transition-all duration-300
+                                      hover:bg-black/90 hover:border-white/20 cursor-pointer
+                                      flex items-center gap-2"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                            Mostra immagine
+                          </motion.button>
+                        </div>
+                      )}
+                    </motion.div>
+                  );
+                })}
+              </div>
+            </motion.div>
+          )}
+          
+          {/* Confirmation modal for sensitive images */}
+          {showImageConfirmation !== null && (
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ duration: 0.3 }}
+                className="bg-zinc-800 rounded-2xl max-w-md w-full p-6 border border-zinc-700/50 shadow-2xl"
+              >
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-12 h-12 bg-rose-600/20 flex items-center justify-center rounded-full">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-xl font-bold text-white">Contenuto sensibile</h3>
+                </div>
+                
+                <p className="text-zinc-300 mb-8">
+                  Questa immagine contiene contenuto sensibile che potrebbe risultare inappropriato per alcuni utenti. Sei sicuro di volerla visualizzare?
+                </p>
+                
+                <div className="flex gap-4 justify-end">
+                  <motion.button
+                    whileHover={{ scale: 1.05, backgroundColor: 'rgb(63 63 70)' }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setShowImageConfirmation(null)}
+                    className="px-5 py-2.5 rounded-xl bg-zinc-700 text-zinc-200 hover:bg-zinc-600 transition-colors duration-200 cursor-pointer"
+                  >
+                    Annulla
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ scale: 1.05, backgroundColor: 'rgb(225 29 72)' }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => showImageConfirmation !== null && confirmViewSensitiveImage(showImageConfirmation)}
+                    className="px-5 py-2.5 rounded-xl bg-rose-600 text-white hover:bg-rose-700 transition-colors duration-200 cursor-pointer flex items-center gap-2"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    Mostra immagine
+                  </motion.button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+
           {/* YouTube Videos Section */}
           {videos.length > 0 && (
             <div className="mt-10 mb-8">
@@ -1717,12 +2095,49 @@ export default function Article() {
 
       {/* Modal per la condivisione (solo per admin) */}
       {showShareModal && <ShareModal />}
+
+      {/* Image modal for larger view */}
+      {selectedImage && (
+        <div 
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={closeImageModal} // Close modal when clicking outside
+        >
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 0.3 }}
+            className="bg-zinc-800 rounded-2xl max-w-3xl w-full p-6 border border-zinc-700/50 shadow-2xl"
+            onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside
+          >
+            <div className="relative">
+              <button 
+                onClick={() => setSelectedImage(null)} // Directly set selectedImage to null
+                className="absolute top-4 right-4 text-zinc-400 hover:text-white transition-colors z-10 cursor-pointer p-2 bg-zinc-900/50 hover:bg-zinc-900 rounded-full"
+                aria-label="Chiudi"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+              <div className="relative w-full h-[80vh]">
+                <Image
+                  src={selectedImage}
+                  alt="Immagine ingrandita"
+                  layout="fill"
+                  objectFit="contain"
+                  className="rounded-xl"
+                />
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </motion.main>
   )
 } 
 
 // Add this function to calculate schedule progress percentage
-function getScheduleProgress(scheduleDate: string): number {
+export function getScheduleProgress(scheduleDate: string): number {
   const now = new Date();
   const scheduledTime = new Date(scheduleDate);
   const creationTime = new Date(now.getTime() - (1000 * 60 * 60 * 24 * 7)); // Assume article was created 7 days ago

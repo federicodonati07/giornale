@@ -439,9 +439,6 @@ export default function NewArticlePage() {
         contenuto,
         immagine: imageUrl,
         tag: selectedTags.join(", "),
-        partecipanti: participants.join(", "),
-        additionalLinks,
-        secondaryNotes,
         uuid: articleUuid,
         creazione: new Date().toISOString(),
         upvote: 0,
@@ -449,10 +446,29 @@ export default function NewArticlePage() {
         view: 0,
         userId: currentUser.uid,
         isPrivate,
-        status: 'revision',
-        relatedImages: relatedImageUrls.length > 0 ? relatedImageUrls : undefined,
-        sensitiveTags: sensitiveTags.length > 0 ? sensitiveTags : undefined,
+        status: 'revision'
       };
+
+      // Add optional fields only if they have values
+      if (participants.length > 0) {
+        articleData.partecipanti = participants.join(", ");
+      }
+
+      if (additionalLinks.length > 0) {
+        articleData.additionalLinks = additionalLinks;
+      }
+
+      if (secondaryNotes.length > 0) {
+        articleData.secondaryNotes = secondaryNotes;
+      }
+
+      if (relatedImageUrls.length > 0) {
+        articleData.relatedImages = relatedImageUrls;
+      }
+
+      if (sensitiveTags.length > 0) {
+        articleData.sensitiveTags = sensitiveTags;
+      }
 
       try {
         const articleRef = dbRef(db, `articoli/${articleUuid}`);
@@ -464,7 +480,10 @@ export default function NewArticlePage() {
         }, 1500);
       } catch (dbError) {
         console.error("Errore durante il salvataggio nel database:", dbError);
-        showNotification("error", "Errore durante il salvataggio nel database. Verifica le regole di sicurezza.");
+        const errorMessage = dbError instanceof Error 
+          ? dbError.message 
+          : "Errore sconosciuto";
+        showNotification("error", `Errore durante il salvataggio nel database: ${errorMessage}`);
         setSaving(false);
       }
     } catch (error) {
@@ -1476,94 +1495,126 @@ export default function NewArticlePage() {
               </label>
               
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {[0, 1, 2].map((index) => (
-                  <div key={index} className="relative">
-                    <input
-                      type="file"
-                      ref={el => { relatedFileInputRefs.current[index] = el }}
-                      accept="image/*"
-                      onChange={(e) => handleRelatedFileChange(index, e)}
-                      className="hidden"
-                    />
-                    
-                    {relatedPreviews[index] ? (
-                      <div className="relative h-48 rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-700 shadow-md group">
-                        <img 
-                          src={relatedPreviews[index]!} 
-                          alt={`Immagine correlata ${index + 1}`} 
-                          className={`w-full h-full object-cover transition-all duration-300 ${relatedSensitiveFlags[index] ? 'blur-sm group-hover:blur-none' : ''}`}
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-100 pointer-events-none"></div>
-                        <div className="absolute top-2 right-2 flex gap-2">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (relatedPreviews[index]) {
-                                document.execCommand('insertImage', false, relatedPreviews[index]!);
-                              }
-                            }}
-                            className="bg-blue-500 text-white rounded-full p-1 shadow-lg hover:bg-blue-600 transition-colors"
-                            title="Inserisci nell'editor"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              removeRelatedImage(index);
-                            }}
-                            className="bg-red-500 text-white rounded-full p-1 shadow-lg hover:bg-red-600 transition-colors cursor-pointer"
-                            title="Rimuovi immagine"
-                          >
-                            <FiTrash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                        
-                        {/* Switch moderno per contenuto sensibile */}
-                        <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/90 to-black/40 text-white flex items-center justify-between transition-all duration-300">
-                          <span className="text-xs font-medium">Immagine {index + 1}</span>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs whitespace-nowrap">Sensibile</span>
-                            <button 
-                              onClick={() => {
-                                const newFlags = [...relatedSensitiveFlags];
-                                newFlags[index] = !newFlags[index];
-                                setRelatedSensitiveFlags(newFlags);
+                {[0, 1, 2].map((index) => {
+                  // Determine if this slot should be disabled
+                  const isDisabled = index > 0 && !relatedFiles[index - 1];
+                  
+                  return (
+                    <div key={index} className="relative">
+                      <input
+                        type="file"
+                        ref={el => { relatedFileInputRefs.current[index] = el }}
+                        accept="image/*"
+                        onChange={(e) => handleRelatedFileChange(index, e)}
+                        className="hidden"
+                        disabled={isDisabled}
+                      />
+                      
+                      {relatedPreviews[index] ? (
+                        <div className="relative h-48 rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-700 shadow-md group">
+                          <img 
+                            src={relatedPreviews[index]!} 
+                            alt={`Immagine correlata ${index + 1}`} 
+                            className={`w-full h-full object-cover transition-all duration-300 ${relatedSensitiveFlags[index] ? 'blur-sm group-hover:blur-none' : ''}`}
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-100 pointer-events-none"></div>
+                          <div className="absolute top-2 right-2 flex gap-2">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (relatedPreviews[index]) {
+                                  document.execCommand('insertImage', false, relatedPreviews[index]!);
+                                }
                               }}
-                              className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors duration-300 focus:outline-none cursor-pointer ${relatedSensitiveFlags[index] ? 'bg-rose-500' : 'bg-zinc-400'}`}
+                              className="bg-blue-500 text-white rounded-full p-1 shadow-lg hover:bg-blue-600 transition-colors"
+                              title="Inserisci nell'editor"
                             >
-                              <span className="sr-only">Attiva contenuto sensibile</span>
-                              <span
-                                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-md transition-transform duration-300 ${relatedSensitiveFlags[index] ? 'translate-x-5' : 'translate-x-1'}`}
-                              />
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removeRelatedImage(index);
+                              }}
+                              className="bg-red-500 text-white rounded-full p-1 shadow-lg hover:bg-red-600 transition-colors cursor-pointer"
+                              title="Rimuovi immagine"
+                            >
+                              <FiTrash2 className="h-4 w-4" />
                             </button>
                           </div>
-                        </div>
-                        
-                        {/* Badge per contenuto sensibile */}
-                        {relatedSensitiveFlags[index] && (
-                          <div className="absolute top-2 left-2 bg-rose-500 text-white text-xs font-bold px-2 py-1 rounded shadow-md">
-                            SENSIBILE
+                          
+                          {/* Switch moderno per contenuto sensibile */}
+                          <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/90 to-black/40 text-white flex items-center justify-between transition-all duration-300">
+                            <span className="text-xs font-medium">Immagine {index + 1}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs whitespace-nowrap">Sensibile</span>
+                              <button 
+                                onClick={() => {
+                                  const newFlags = [...relatedSensitiveFlags];
+                                  newFlags[index] = !newFlags[index];
+                                  setRelatedSensitiveFlags(newFlags);
+                                }}
+                                className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors duration-300 focus:outline-none cursor-pointer ${relatedSensitiveFlags[index] ? 'bg-rose-500' : 'bg-zinc-400'}`}
+                              >
+                                <span className="sr-only">Attiva contenuto sensibile</span>
+                                <span
+                                  className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-md transition-transform duration-300 ${relatedSensitiveFlags[index] ? 'translate-x-5' : 'translate-x-1'}`}
+                                />
+                              </button>
+                            </div>
                           </div>
-                        )}
-                      </div>
-                    ) : (
-                      // Mostra l'area di caricamento se non c'è un'immagine
-                      <div 
-                        onClick={() => relatedFileInputRefs.current[index]?.click()}
-                        className="h-48 p-6 bg-white/5 dark:bg-zinc-800/20 border-2 border-dashed border-zinc-300 dark:border-zinc-700 rounded-xl hover:border-amber-500 dark:hover:border-amber-400 transition-all duration-300 cursor-pointer flex flex-col items-center justify-center"
-                      >
-                        <div className="mx-auto h-10 w-10 rounded-full bg-amber-100 dark:bg-amber-900 flex items-center justify-center mb-3">
-                          <FiUpload className="h-5 w-5 text-amber-600 dark:text-amber-300" />
+                          
+                          {/* Badge per contenuto sensibile */}
+                          {relatedSensitiveFlags[index] && (
+                            <div className="absolute top-2 left-2 bg-rose-500 text-white text-xs font-bold px-2 py-1 rounded shadow-md">
+                              SENSIBILE
+                            </div>
+                          )}
                         </div>
-                        <p className="text-sm text-zinc-800 dark:text-zinc-300 font-medium text-center">Immagine correlata {index + 1}</p>
-                        <p className="text-xs text-zinc-500 mt-1 text-center">Clicca per caricare</p>
-                      </div>
-                    )}
-                  </div>
-                ))}
+                      ) : (
+                        // Mostra l'area di caricamento se non c'è un'immagine
+                        <div 
+                          onClick={() => !isDisabled && relatedFileInputRefs.current[index]?.click()}
+                          className={`h-48 p-6 bg-white/5 dark:bg-zinc-800/20 border-2 border-dashed ${
+                            isDisabled 
+                              ? 'border-zinc-300/40 dark:border-zinc-700/40 opacity-50 cursor-not-allowed' 
+                              : 'border-zinc-300 dark:border-zinc-700 hover:border-amber-500 dark:hover:border-amber-400 cursor-pointer'
+                          } rounded-xl transition-all duration-300 flex flex-col items-center justify-center`}
+                        >
+                          <div className={`mx-auto h-10 w-10 rounded-full ${
+                            isDisabled 
+                              ? 'bg-zinc-200 dark:bg-zinc-700' 
+                              : 'bg-amber-100 dark:bg-amber-900'
+                          } flex items-center justify-center mb-3`}>
+                            <FiUpload className={`h-5 w-5 ${
+                              isDisabled 
+                                ? 'text-zinc-400 dark:text-zinc-500' 
+                                : 'text-amber-600 dark:text-amber-300'
+                            }`} />
+                          </div>
+                          <p className={`text-sm font-medium text-center ${
+                            isDisabled 
+                              ? 'text-zinc-400 dark:text-zinc-500' 
+                              : 'text-zinc-800 dark:text-zinc-300'
+                          }`}>
+                            Immagine correlata {index + 1}
+                          </p>
+                          <p className={`text-xs mt-1 text-center ${
+                            isDisabled 
+                              ? 'text-zinc-400 dark:text-zinc-600' 
+                              : 'text-zinc-500'
+                          }`}>
+                            {isDisabled 
+                              ? `Carica prima l'immagine ${index}` 
+                              : 'Clicca per caricare'}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
               
               <p className="mt-2 text-xs text-zinc-500">
