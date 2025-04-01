@@ -2,6 +2,36 @@ import { NextResponse } from "next/server";
 import { initAdminSDK } from "@/lib/firebase-admin";
 import { getDatabase } from "firebase-admin/database";
 
+// Define interfaces for type safety
+interface UserData {
+  id?: string;
+  displayName?: string;
+  email?: string;
+  createdAt?: string;
+  lastSignInTime?: string;
+  emailVerified?: boolean;
+  role?: string;
+  provider?: string;
+  // Additional fields might exist
+}
+
+interface ArticleData {
+  id?: string;
+  titolo?: string;
+  contenuto?: string;
+  categoria?: string;
+  category?: string;
+  tag?: string;
+  immagine?: string;
+  autore?: string;
+  creazione?: string;
+  view?: number;
+  upvote?: number;
+  shared?: number;
+  sensitiveTags?: string[];
+  // Additional fields might exist
+}
+
 // Initialize Firebase Admin SDK
 const admin = initAdminSDK();
 
@@ -14,8 +44,8 @@ export async function GET() {
 
     // Ottieni gli utenti da Firebase Auth
     console.log("Fetching users data from Firebase Auth...");
-    let users = [];
-    let authUsers = [];
+    let users: UserData[] = [];
+    let authUsers: UserData[] = [];
 
     try {
       // Accedi a Firebase Auth
@@ -42,7 +72,7 @@ export async function GET() {
       // Tenta di arricchire i dati degli utenti con informazioni dal database
       // Cerca in diverse posizioni nel database
       const paths = ["utenti", "users", "user"];
-      const userDbData: Record<string, any> = {};
+      const userDbData: Record<string, UserData> = {};
 
       for (const path of paths) {
         console.log(`Checking ${path} path for additional user data...`);
@@ -62,7 +92,7 @@ export async function GET() {
 
       // Arricchisci i dati utente con informazioni aggiuntive dal database
       users = authUsers.map((authUser) => {
-        const dbUserData = userDbData[authUser.id] || {};
+        const dbUserData = userDbData[authUser.id || ""] || {};
         return {
           ...authUser,
           // Usa i dati del database se disponibili, altrimenti mantieni quelli di Auth
@@ -98,9 +128,10 @@ export async function GET() {
             // Convert to array format with proper id
             users = Object.entries(userData).map(([id, data]) => ({
               id,
-              ...(data as any),
+              ...(data as UserData),
               // Ensure createdAt exists (fallback to current date)
-              createdAt: (data as any).createdAt || new Date().toISOString(),
+              createdAt:
+                (data as UserData).createdAt || new Date().toISOString(),
             }));
 
             if (users.length > 0) {
@@ -221,33 +252,34 @@ export async function GET() {
     const articlesData = articlesSnapshot.val() || {};
 
     // Convert to array and calculate stats
-    const articles = Object.entries(articlesData).map(([id, data]) => ({
-      id,
-      ...(data as any),
-    }));
+    const articles: ArticleData[] = Object.entries(articlesData).map(
+      ([id, data]) => ({
+        id,
+        ...(data as ArticleData),
+      })
+    );
     console.log(`Processed ${articles.length} articles`);
 
     // Calculate total stats
     const totalUsers = users.length;
     const totalArticles = articles.length;
     const totalViews = articles.reduce(
-      (sum, article) => sum + ((article as any).view || 0),
+      (sum, article) => sum + (article.view || 0),
       0
     );
     const totalLikes = articles.reduce(
-      (sum, article) => sum + ((article as any).upvote || 0),
+      (sum, article) => sum + (article.upvote || 0),
       0
     );
     const totalShares = articles.reduce(
-      (sum, article) => sum + ((article as any).shared || 0),
+      (sum, article) => sum + (article.shared || 0),
       0
     );
 
     // Count of sensitive content
     const sensitiveTags = articles.filter(
       (article) =>
-        Array.isArray((article as any).sensitiveTags) &&
-        (article as any).sensitiveTags.length > 0
+        Array.isArray(article.sensitiveTags) && article.sensitiveTags.length > 0
     ).length;
 
     // Get recent users (with fallback for missing values)
@@ -281,13 +313,15 @@ export async function GET() {
     }
 
     // Calculate user registrations by month
-    const usersByMonth = {};
+    const usersByMonth: Record<string, number> = {};
     users.forEach((user) => {
       try {
-        const date = new Date(user.createdAt);
-        if (!isNaN(date.getTime())) {
-          const monthKey = `${date.getFullYear()}-${date.getMonth() + 1}`;
-          usersByMonth[monthKey] = (usersByMonth[monthKey] || 0) + 1;
+        if (user.createdAt) {
+          const date = new Date(user.createdAt);
+          if (!isNaN(date.getTime())) {
+            const monthKey = `${date.getFullYear()}-${date.getMonth() + 1}`;
+            usersByMonth[monthKey] = (usersByMonth[monthKey] || 0) + 1;
+          }
         }
       } catch (err) {
         console.error(`Error processing date for user ${user.id}:`, err);
@@ -317,7 +351,7 @@ export async function GET() {
       let mainCategory = "";
 
       // Try different fields with fallbacks
-      const articleData = article as any;
+      const articleData = article;
 
       // Approach 1: Check for categoria field
       if (articleData.categoria && typeof articleData.categoria === "string") {
@@ -339,7 +373,7 @@ export async function GET() {
           mainCategory = tags[0].trim();
 
           // Also count all tags separately
-          tags.forEach((tag) => {
+          tags.forEach((tag: string) => {
             const trimmedTag = tag.trim();
             if (trimmedTag) {
               if (!tagCounts[trimmedTag]) {
