@@ -94,8 +94,17 @@ export default function FavoriteArticles() {
     const diffMins = Math.floor(diffSecs / 60)
     const diffHours = Math.floor(diffMins / 60)
     const diffDays = Math.floor(diffHours / 24)
+    const diffWeeks = Math.floor(diffDays / 7)
+    const diffMonths = Math.floor(diffDays / 30)
+    const diffYears = Math.floor(diffDays / 365)
     
-    if (diffDays > 0) {
+    if (diffYears > 0) {
+      return `${diffYears} ${diffYears === 1 ? 'anno' : 'anni'} fa`
+    } else if (diffMonths > 0) {
+      return `${diffMonths} ${diffMonths === 1 ? 'mese' : 'mesi'} fa`
+    } else if (diffWeeks > 0) {
+      return `${diffWeeks} ${diffWeeks === 1 ? 'settimana' : 'settimane'} fa`
+    } else if (diffDays > 0) {
       return `${diffDays} ${diffDays === 1 ? 'giorno' : 'giorni'} fa`
     } else if (diffHours > 0) {
       return `${diffHours} ${diffHours === 1 ? 'ora' : 'ore'} fa`

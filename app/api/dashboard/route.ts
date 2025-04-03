@@ -338,6 +338,56 @@ export async function GET() {
 
     console.log("User registration chart data ready with 12 months");
 
+    // Enhanced registration data for more granular filtering
+    // This includes data by day for the last 365 days
+    const enhanced365DaysData = [];
+    const dailyUserCounts: Record<string, number> = {};
+
+    // Group users by specific date (year-month-day)
+    users.forEach((user) => {
+      try {
+        if (user.createdAt) {
+          const date = new Date(user.createdAt);
+          if (!isNaN(date.getTime())) {
+            // Create day-level key
+            const dayKey = `${date.getFullYear()}-${
+              date.getMonth() + 1
+            }-${date.getDate()}`;
+            dailyUserCounts[dayKey] = (dailyUserCounts[dayKey] || 0) + 1;
+          }
+        }
+      } catch (err) {
+        console.error(
+          `Error processing day-level date for user ${user.id}:`,
+          err
+        );
+      }
+    });
+
+    // Create array for the last 365 days with day-level data
+    for (let i = 364; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+
+      // Create the date key in the same format used above
+      const dayKey = `${date.getFullYear()}-${
+        date.getMonth() + 1
+      }-${date.getDate()}`;
+
+      enhanced365DaysData.push({
+        day: date.getDate(),
+        month: date.toLocaleString("it-IT", { month: "short" }),
+        year: date.getFullYear(),
+        key: dayKey,
+        count: dailyUserCounts[dayKey] || 0,
+      });
+    }
+
+    // Use the enhanced data instead of the monthly data
+    const enhancedRegistrationChartData = enhanced365DaysData;
+
+    console.log("Enhanced registration chart data ready with 365 days");
+
     // Extract registration stats for chart
     const last30Days = new Date();
     last30Days.setDate(last30Days.getDate() - 30);
@@ -418,6 +468,7 @@ export async function GET() {
       categoryCounts,
       tagCounts,
       registrationChartData,
+      enhancedRegistrationChartData,
       debug: {
         userCount: users.length,
         articleCount: articles.length,

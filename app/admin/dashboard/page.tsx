@@ -66,7 +66,22 @@ interface ChartDataset {
 interface ChartData {
   labels: string[]
   datasets: ChartDataset[]
+  _detailedLabels?: string[] // Detailed labels for tooltips
 }
+
+// Registration data item interface
+interface RegistrationDataItem {
+  day?: number;
+  month: string;
+  year: number;
+  key: string;
+  count: number;
+  date?: Date;
+  isStartPoint?: boolean; // Added for initial point to show cumulative total
+}
+
+// Period options for time filtering
+type TimePeriod = 'day' | 'week' | 'month' | 'year' | 'all';
 
 // Format numbers with commas
 const formatNumber = (num: number) => {
@@ -127,6 +142,12 @@ export default function AdminDashboard() {
     labels: [],
     datasets: []
   })
+  
+  // Raw registration data (for filtering)
+  const [rawRegistrationData, setRawRegistrationData] = useState<RegistrationDataItem[]>([])
+  
+  // Selected time period filter
+  const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>('all')
   
   // Article stats data for graph
   const [articleData, setArticleData] = useState<ChartData>({
@@ -225,6 +246,314 @@ export default function AdminDashboard() {
     checkUserAuth()
   }, [router])
   
+  // Process registration data based on selected time period
+  const processRegistrationData = (data: RegistrationDataItem[], period: TimePeriod) => {
+    if (!data || data.length === 0) return;
+
+    // Convert raw data strings to Date objects
+    const dataWithDates = data.map(item => {
+      // Parse month name to month number (0-11)
+      const months = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
+      const monthIndex = months.findIndex(m => item.month.startsWith(m));
+      
+      // Create a new date object
+      const dateObj = new Date(item.year, monthIndex, item.day || 1);
+      
+      return {
+        ...item,
+        date: dateObj
+      };
+    });
+
+    // Sort by date
+    dataWithDates.sort((a, b) => {
+      if (a.date && b.date) {
+        return a.date.getTime() - b.date.getTime();
+      }
+      return 0;
+    });
+
+    // Get the total users before filtering by period
+    // This will be used to start our chart at the correct cumulative value
+    let initialTotalUsers = 0;
+    
+    // Current date for filtering
+    const now = new Date();
+    
+    // Filter based on selected period
+    let filteredData = [...dataWithDates];
+    
+    if (period === 'day') {
+      // Last 24 hours
+      const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      
+      // Calculate total users before this period
+      initialTotalUsers = dataWithDates
+        .filter(item => item.date && item.date < oneDayAgo)
+        .reduce((sum, item) => sum + item.count, 0);
+      
+      filteredData = dataWithDates.filter(item => item.date && item.date >= oneDayAgo);
+    } else if (period === 'week') {
+      // Last 7 days
+      const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      
+      // Calculate total users before this period
+      initialTotalUsers = dataWithDates
+        .filter(item => item.date && item.date < oneWeekAgo)
+        .reduce((sum, item) => sum + item.count, 0);
+      
+      filteredData = dataWithDates.filter(item => item.date && item.date >= oneWeekAgo);
+    } else if (period === 'month') {
+      // Last 30 days
+      const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      
+      // Calculate total users before this period
+      initialTotalUsers = dataWithDates
+        .filter(item => item.date && item.date < oneMonthAgo)
+        .reduce((sum, item) => sum + item.count, 0);
+      
+      filteredData = dataWithDates.filter(item => item.date && item.date >= oneMonthAgo);
+    } else if (period === 'year') {
+      // Last 365 days
+      const oneYearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+      
+      // Calculate total users before this period
+      initialTotalUsers = dataWithDates
+        .filter(item => item.date && item.date < oneYearAgo)
+        .reduce((sum, item) => sum + item.count, 0);
+      
+      filteredData = dataWithDates.filter(item => item.date && item.date >= oneYearAgo);
+    }
+    
+    // If no data found for the selected period, show empty chart with message
+    if (filteredData.length === 0) {
+      setUserRegData({
+        labels: [],
+        datasets: []
+      });
+      return;
+    }
+    
+    // If initialTotalUsers > 0, add a starting point to show the previous total
+    if (initialTotalUsers > 0 && filteredData.length > 0) {
+      // Create a starting point at the first filtered date, but with previous total
+      const firstItem = filteredData[0];
+      if (firstItem && firstItem.date) {
+        // Create a point just before the first filtered date (1 minute before)
+        const startDate = new Date(firstItem.date.getTime() - 60000);
+        
+        // Add this initial point to the filtered data
+        filteredData.unshift({
+          day: startDate.getDate(),
+          month: startDate.toLocaleString("it-IT", { month: "short" }),
+          year: startDate.getFullYear(),
+          key: `start-${startDate.getTime()}`,
+          count: 0, // This will be added to initialTotalUsers during cumulative calculation
+          date: startDate,
+          isStartPoint: true // Mark as a special starting point
+        });
+      }
+    }
+    
+    // Reduce data points for a more minimal look based on time period
+    let reducedData: RegistrationDataItem[] = [...filteredData];
+    if (period === 'month' && filteredData.length > 15) {
+      // For month view, group by every 2 days
+      const grouped: Record<string, RegistrationDataItem> = {};
+      
+      // Keep the initial point if it exists
+      if (filteredData.length > 0 && filteredData[0].isStartPoint) {
+        grouped['start'] = filteredData[0];
+      }
+      
+      filteredData.forEach((item, index) => {
+        // Skip the start point which is already added
+        if (index === 0 && item.isStartPoint) return;
+        
+        if (!item.date) return;
+        const dayGroup = Math.floor(item.date.getDate() / 2);
+        const key = `${item.year}-${item.month}-${dayGroup}`;
+        
+        if (!grouped[key]) {
+          grouped[key] = { 
+            ...item, 
+            count: 0
+          };
+        }
+        grouped[key].count += item.count;
+      });
+      
+      reducedData = Object.values(grouped);
+      // Sort by date
+      reducedData.sort((a, b) => {
+        // Keep start point at beginning
+        if (a.isStartPoint) return -1;
+        if (b.isStartPoint) return 1;
+        
+        if (a.date && b.date) return a.date.getTime() - b.date.getTime();
+        return 0;
+      });
+    } else if (period === 'year' && filteredData.length > 30) {
+      // For year view, group by every week
+      const grouped: Record<string, RegistrationDataItem> = {};
+      
+      // Keep the initial point if it exists
+      if (filteredData.length > 0 && filteredData[0].isStartPoint) {
+        grouped['start'] = filteredData[0];
+      }
+      
+      filteredData.forEach((item, index) => {
+        // Skip the start point which is already added
+        if (index === 0 && item.isStartPoint) return;
+        
+        if (!item.date) return;
+        // Get week number - safely convert to numbers
+        const firstDayOfYear = new Date(item.date.getFullYear(), 0, 1);
+        const pastDaysOfYear = Math.floor((item.date.getTime() - firstDayOfYear.getTime()) / 86400000);
+        const dayOfYear = firstDayOfYear.getDay(); // 0-6
+        const weekNum = Math.floor((pastDaysOfYear + dayOfYear + 1) / 7);
+        
+        const key = `${item.year}-${weekNum}`;
+        
+        if (!grouped[key]) {
+          grouped[key] = { 
+            ...item, 
+            count: 0
+          };
+        }
+        grouped[key].count += item.count;
+      });
+      
+      reducedData = Object.values(grouped);
+      // Sort by date
+      reducedData.sort((a, b) => {
+        // Keep start point at beginning
+        if (a.isStartPoint) return -1;
+        if (b.isStartPoint) return 1;
+        
+        if (a.date && b.date) return a.date.getTime() - b.date.getTime();
+        return 0;
+      });
+    } else if (period === 'all' && filteredData.length > 50) {
+      // For all-time view, group by month
+      const grouped: Record<string, RegistrationDataItem> = {};
+      
+      // Keep the initial point if it exists
+      if (filteredData.length > 0 && filteredData[0].isStartPoint) {
+        grouped['start'] = filteredData[0];
+      }
+      
+      filteredData.forEach((item, index) => {
+        // Skip the start point which is already added
+        if (index === 0 && item.isStartPoint) return;
+        
+        if (!item.date) return;
+        const key = `${item.year}-${item.month}`;
+        
+        if (!grouped[key]) {
+          grouped[key] = { 
+            ...item, 
+            count: 0,
+            day: 15 // Set to middle of month for better visualization
+          };
+          // Ensure date is set to middle of month
+          grouped[key].date = new Date(item.year, item.date.getMonth(), 15);
+        }
+        grouped[key].count += item.count;
+      });
+      
+      reducedData = Object.values(grouped);
+      // Sort by date
+      reducedData.sort((a, b) => {
+        // Keep start point at beginning
+        if (a.isStartPoint) return -1;
+        if (b.isStartPoint) return 1;
+        
+        if (a.date && b.date) return a.date.getTime() - b.date.getTime();
+        return 0;
+      });
+    }
+
+    // Calculate cumulative growth including initialTotalUsers
+    let totalUsers = initialTotalUsers;
+    const cumulativeCounts = reducedData.map(item => {
+      totalUsers += item.count;
+      return totalUsers;
+    });
+
+    // Format labels based on time period
+    const labels = reducedData.map((item) => {
+      if (!item.date) return '';
+      
+      // For the initial point, show "Totale precedente" instead of the date
+      if (item.isStartPoint) {
+        return 'Inizio periodo';
+      }
+      
+      // Format based on time period
+      if (period === 'day') {
+        // Show hours for daily view
+        return item.date.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+      } else if (period === 'week') {
+        // Show day name and day number for weekly view (e.g. "Lun 15")
+        const dayName = item.date.toLocaleDateString('it-IT', { weekday: 'short' });
+        const dayNum = item.date.getDate();
+        return `${dayName} ${dayNum}`;
+      } else if (period === 'month') {
+        // Show day and abbreviated month for monthly view (e.g. "15 Gen")
+        const day = item.date.getDate();
+        const month = item.date.toLocaleDateString('it-IT', { month: 'short' });
+        return `${day} ${month}`;
+      } else if (period === 'year') {
+        // Show month name for yearly view
+        return item.date.toLocaleDateString('it-IT', { month: 'long' });
+      } else {
+        // Show month and year for all time
+        return item.date.toLocaleDateString('it-IT', { month: 'short', year: 'numeric' });
+      }
+    });
+    
+    // Create a more detailed labels array for tooltips
+    const detailedLabels = reducedData.map((item, index) => {
+      if (!item.date) return '';
+      
+      // Special handling for initial point
+      if (item.isStartPoint) {
+        return `Totale utenti all'inizio del periodo: ${cumulativeCounts[index]}`;
+      }
+      
+      // Full format for tooltips - include date and cumulative count
+      const dateFormat = period === 'day' 
+        ? item.date.toLocaleString('it-IT', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+        : item.date.toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' });
+      
+      return `${dateFormat} - Totale utenti: ${cumulativeCounts[index]}`;
+    });
+    
+    // Update chart data
+    setUserRegData({
+      labels,
+      datasets: [
+        {
+          label: 'Utenti Totali',
+          data: cumulativeCounts,
+          fill: true,
+          backgroundColor: 'rgba(147, 51, 234, 0.2)',
+          borderColor: 'rgba(147, 51, 234, 1)',
+          tension: 0.4, // Increased for smoother curve
+          borderWidth: 2,
+          pointRadius: 0, // Hide points for a cleaner look
+          pointHoverRadius: 4, // Show points on hover
+          pointBackgroundColor: 'white',
+          pointBorderColor: 'rgba(147, 51, 234, 1)',
+          pointBorderWidth: 2,
+        },
+      ],
+      // Store detailed labels for tooltips
+      _detailedLabels: detailedLabels
+    });
+  };
+  
   // Fetch dashboard data
   const fetchData = async () => {
     setLoading(true);
@@ -285,42 +614,44 @@ export default function AdminDashboard() {
       }
       
       // Process registration data for the line chart
-      if (data.registrationChartData && data.registrationChartData.length > 0) {
-        // Formatta i dati per Chart.js
-        const months = data.registrationChartData.map((item: {
+      if (data.enhancedRegistrationChartData && data.enhancedRegistrationChartData.length > 0) {
+        console.log('Using enhanced registration data with day-level information');
+        
+        // Store the enhanced data with day-level details
+        const enhancedData = data.enhancedRegistrationChartData.map((item: {
+          day: number;
           month: string;
           year: number;
           key: string;
           count: number;
-        }) => `${item.month} ${item.year.toString().slice(2)}`);
+        }) => ({
+          ...item,
+          // day is already included in the enhanced data
+        }));
         
-        const counts = data.registrationChartData.map((item: {
+        setRawRegistrationData(enhancedData);
+        
+        // Initial processing with all data
+        processRegistrationData(enhancedData, selectedPeriod);
+      } else if (data.registrationChartData && data.registrationChartData.length > 0) {
+        // Fallback to monthly data if enhanced data is not available
+        console.log('Falling back to monthly registration data');
+        
+        const rawData = data.registrationChartData.map((item: {
+          day?: number;
           month: string;
           year: number;
           key: string;
           count: number;
-        }) => item.count);
+        }) => ({
+          ...item,
+          day: item.day || 1 // Default to 1st day if day is not provided
+        }));
         
-        console.log('Registration chart data:', months, counts);
+        setRawRegistrationData(rawData);
         
-        setUserRegData({
-          labels: months,
-          datasets: [
-            {
-              label: 'Nuovi Utenti',
-              data: counts,
-              fill: true,
-              backgroundColor: 'rgba(147, 51, 234, 0.2)',
-              borderColor: 'rgba(147, 51, 234, 1)',
-              tension: 0.3,
-              pointRadius: 4,
-              pointHoverRadius: 6,
-              pointBackgroundColor: 'white',
-              pointBorderColor: 'rgba(147, 51, 234, 1)',
-              pointBorderWidth: 2,
-            },
-          ],
-        });
+        // Initial processing with all data
+        processRegistrationData(rawData, selectedPeriod);
       } else {
         console.warn("No registration data received from API, using fallback");
         // Fallback empty chart data
@@ -481,6 +812,13 @@ export default function AdminDashboard() {
       return sortOrder === "asc" ? dateA - dateB : dateB - dateA;
     });
   
+  // Update chart when time period changes
+  useEffect(() => {
+    if (rawRegistrationData.length > 0) {
+      processRegistrationData(rawRegistrationData, selectedPeriod);
+    }
+  }, [selectedPeriod, rawRegistrationData]);
+  
   // Don't render until auth is checked
   if (!authChecked || !isAuthorized) {
     return (
@@ -557,58 +895,157 @@ export default function AdminDashboard() {
             transition={{ duration: 0.5, delay: 0.2 }}
             className="bg-white dark:bg-zinc-800 rounded-xl shadow p-6 lg:col-span-8"
           >
-            <h2 className="text-lg font-semibold text-zinc-900 dark:text-white mb-4">Storico Iscrizioni</h2>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">Storico Iscrizioni</h2>
+              
+              {/* Time period filters */}
+              <div className="flex items-center space-x-2">
+                <span className="text-sm text-zinc-500 dark:text-zinc-400">Periodo:</span>
+                <div className="flex bg-zinc-100 dark:bg-zinc-700 rounded-lg p-1">
+                  {[
+                    { id: 'day', label: 'Giorno' },
+                    { id: 'week', label: 'Settimana' },
+                    { id: 'month', label: 'Mese' },
+                    { id: 'year', label: 'Anno' },
+                    { id: 'all', label: 'Tutti' },
+                  ].map((period) => (
+                    <button
+                      key={period.id}
+                      onClick={() => setSelectedPeriod(period.id as TimePeriod)}
+                      className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                        selectedPeriod === period.id
+                          ? 'bg-indigo-500 text-white'
+                          : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-600'
+                      }`}
+                    >
+                      {period.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
             
             {loading ? (
               <div className="animate-pulse h-64 bg-zinc-100 dark:bg-zinc-700 rounded-lg"></div>
             ) : (
               <div className="h-64">
-                <Line
-                  data={userRegData}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                      legend: {
-                        position: 'top',
-                        labels: {
-                          boxWidth: 15,
-                          usePointStyle: true,
-                          color: 'rgb(156, 163, 175)'
+                {userRegData.labels.length > 0 ? (
+                  <Line
+                    data={userRegData}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: {
+                        legend: {
+                          position: 'top',
+                          labels: {
+                            boxWidth: 15,
+                            usePointStyle: true,
+                            color: 'rgb(156, 163, 175)'
+                          }
+                        },
+                        tooltip: {
+                          mode: 'index',
+                          intersect: false,
+                          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                          callbacks: {
+                            title: function(tooltipItems) {
+                              const item = tooltipItems[0];
+                              const dataIndex = item.dataIndex;
+                              
+                              // Use detailed labels if available
+                              if (userRegData._detailedLabels && userRegData._detailedLabels[dataIndex]) {
+                                return userRegData._detailedLabels[dataIndex];
+                              }
+                              
+                              // Fallback to regular label
+                              const label = item.label || '';
+                              return `Data: ${label}`;
+                            },
+                            label: function() {
+                              // Don't need to show the value again since it's in the title
+                              return '';
+                            }
+                          }
                         }
                       },
-                      tooltip: {
-                        mode: 'index',
-                        intersect: false,
-                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                      }
-                    },
-                    scales: {
-                      y: {
-                        beginAtZero: true,
-                        ticks: {
-                          color: 'rgb(156, 163, 175)'
+                      scales: {
+                        y: {
+                          beginAtZero: false, // Don't start at zero to better show cumulative growth
+                          ticks: {
+                            color: 'rgb(156, 163, 175)',
+                            precision: 0, // Only show integers
+                            callback: function(value) {
+                              // Only label integers
+                              if (typeof value === 'number') {
+                                return value % 1 === 0 ? value : '';
+                              }
+                              return '';
+                            },
+                            maxTicksLimit: 6 // Limit number of y-axis ticks for a cleaner look
+                          },
+                          grid: {
+                            color: 'rgba(156, 163, 175, 0.1)'
+                          },
+                          title: {
+                            display: true,
+                            text: 'Utenti Totali',
+                            color: 'rgb(156, 163, 175)',
+                            font: {
+                              size: 12
+                            }
+                          }
                         },
-                        grid: {
-                          color: 'rgba(156, 163, 175, 0.1)'
+                        x: {
+                          ticks: {
+                            color: 'rgb(156, 163, 175)',
+                            maxRotation: 45,
+                            minRotation: 45,
+                            autoSkip: true,
+                            maxTicksLimit: 12, // Limit number of ticks for cleaner look
+                            font: {
+                              size: 11 // Slightly larger font for better readability
+                            }
+                          },
+                          grid: {
+                            display: false
+                          },
+                          title: {
+                            display: true,
+                            text: selectedPeriod === 'day' ? 'Orario' : 
+                                  selectedPeriod === 'week' ? 'Giorno' : 
+                                  selectedPeriod === 'month' ? 'Giorno del mese' : 
+                                  selectedPeriod === 'year' ? 'Mese' : 'Data',
+                            color: 'rgb(156, 163, 175)',
+                            font: {
+                              size: 12
+                            },
+                            padding: { top: 10 }
+                          }
                         }
                       },
-                      x: {
-                        ticks: {
-                          color: 'rgb(156, 163, 175)'
-                        },
-                        grid: {
-                          display: false
+                      interaction: {
+                        mode: 'nearest',
+                        axis: 'x',
+                        intersect: false
+                      },
+                      elements: {
+                        line: {
+                          cubicInterpolationMode: 'monotone', // Make curves more natural
                         }
                       }
-                    },
-                    interaction: {
-                      mode: 'nearest',
-                      axis: 'x',
-                      intersect: false
-                    }
-                  }}
-                />
+                    }}
+                  />
+                ) : (
+                  <div className="h-full flex items-center justify-center flex-col">
+                    <div className="text-zinc-500 dark:text-zinc-400 text-lg font-medium mb-2">
+                      Nessun dato disponibile
+                    </div>
+                    <div className="text-zinc-400 dark:text-zinc-500 text-sm">
+                      Non ci sono registrazioni nel periodo selezionato
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </motion.div>
