@@ -534,10 +534,28 @@ export default function NewArticlePage() {
       // Caso speciale per l'evidenziazione
       const currentColor = document.queryCommandValue('backColor');
       const isHighlighted = currentColor === 'rgb(179, 89, 16)';
-      document.execCommand('backColor', false, isHighlighted ? 'inherit' : '#b35910');
+      
+      if (isHighlighted) {
+        // Rimuovi l'evidenziazione
+        document.execCommand('backColor', false, 'inherit');
+        // Rimuovi anche il grassetto se necessario
+        if (document.queryCommandState('bold')) {
+          document.execCommand('bold', false);
+        }
+      } else {
+        // Applica l'evidenziazione
+        document.execCommand('backColor', false, '#b35910');
+        // Applica anche il grassetto per rendere più visibile il testo evidenziato
+        if (!document.queryCommandState('bold')) {
+          document.execCommand('bold', false);
+        }
+      }
+      
       setActiveFormats(prev => ({
         ...prev,
-        highlight: !isHighlighted
+        highlight: !isHighlighted,
+        // Aggiorna anche lo stato del grassetto
+        bold: !isHighlighted ? true : document.queryCommandState('bold')
       }));
     } else if (format === 'xl') {
       // Togliamo prima il formato per assicurarci che non rimanga attivo
@@ -550,9 +568,14 @@ export default function NewArticlePage() {
         // Togliamo il formato grande
         document.execCommand('fontSize', false, '3'); // Ripristina dimensione normale
         document.execCommand('removeFormat', false); // Rimuove tutti i formati
+        // Assicuriamoci che il bold sia disattivato
+        if (document.queryCommandState('bold')) {
+          document.execCommand('bold', false);
+        }
         setActiveFormats(prev => ({
           ...prev,
-          xl: false
+          xl: false,
+          bold: false // Impostiamo esplicitamente bold a false
         }));
       } else {
         // Applichiamo il formato grande (usa la classe in uno stile inline)
@@ -563,7 +586,8 @@ export default function NewArticlePage() {
         
         setActiveFormats(prev => ({
           ...prev,
-          xl: true
+          xl: true,
+          bold: true // Impostiamo esplicitamente bold a true
         }));
       }
     } else {
@@ -591,12 +615,15 @@ export default function NewArticlePage() {
       // Aggiorna il contenuto
       setContenuto(editorContent.innerHTML);
       
+      // Controlla se il testo selezionato ha l'evidenziazione
+      const isHighlighted = document.queryCommandValue('backColor') === 'rgb(179, 89, 16)';
+      
       // Aggiorna lo stato dei formati attivi
       setActiveFormats({
         bold: document.queryCommandState('bold'),
         italic: document.queryCommandState('italic'),
         underline: document.queryCommandState('underline'),
-        highlight: document.queryCommandValue('backColor') === 'rgb(251, 146, 60)',
+        highlight: isHighlighted,
         xl: document.queryCommandValue('fontSize') === '5' // Verifica se è attiva la dimensione 5
       });
     }
@@ -1265,10 +1292,10 @@ export default function NewArticlePage() {
                   }
                 }}
                 className={`
-                  min-h-[300px] w-full p-4 bg-white/5 border border-white/20 rounded-xl 
+                  min-h-[300px] max-h-[500px] w-full p-4 bg-white/5 border border-white/20 rounded-xl 
                   focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 
                   transition-all duration-300 text-zinc-900 dark:text-zinc-50 
-                  outline-none font-montserrat overflow-auto
+                  outline-none font-montserrat overflow-y-auto
                   prose prose-zinc dark:prose-invert max-w-none
                   [&>p]:mb-4 [&>p]:leading-relaxed [&>p]:tracking-wide
                   [&_a]:text-amber-500 [&_a]:no-underline [&_a]:cursor-pointer
@@ -1277,8 +1304,8 @@ export default function NewArticlePage() {
                   dark:[&_a:hover]:text-amber-600
                   [&_a]:transition-colors [&_a]:duration-200
                   [&_a]:pointer-events-auto
-                  [&_[style*='background-color: rgb(251, 146, 60)']]:text-zinc-900
-                  [&_[style*='background-color: rgb(251, 146, 60)']]:bg-amber-500
+                  [&_[style*='background-color: rgb(179, 89, 16)']]:text-zinc-900
+                  [&_[style*='background-color: rgb(179, 89, 16)']]:bg-amber-500
                   [&_font[size='5']]:text-2xl
                   [&_font[size='5']]:font-semibold
                   [&_font[size='5']]:leading-relaxed
