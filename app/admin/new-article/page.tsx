@@ -24,7 +24,8 @@ const availableCategories = [
   "SCIENZE & NATURA",
   "MEDICINA",
   "ARTE & CULTURA",
-  "ITALIA"
+  "ITALIA",
+  "STORIA"
 ]
 
 // Aggiungi questo all'interfaccia ArticleData se esiste, altrimenti creala

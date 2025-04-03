@@ -137,7 +137,8 @@ export default function ManageArticlesPage() {
     "SCIENZE & NATURA",
     "MEDICINA",
     "ARTE & CULTURA",
-    "ITALIA"
+    "ITALIA",
+    "STORIA"
   ];
 
   // Verifica se l'utente è autorizzato

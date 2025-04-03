@@ -4,7 +4,8 @@ import { useState, useEffect } from "react"
 import Image from "next/image"
 import { ref, get, update, increment } from "firebase/database"
 import { db } from "../firebase"
-import { FiHeart, FiShare2, FiEye, FiClock, FiArrowLeft, FiUser } from "react-icons/fi"
+import { FiHeart, FiShare2, FiEye, FiClock, FiArrowLeft, FiUser, FiFilter } from "react-icons/fi"
+import { LuFilterX, LuClockArrowUp, LuClockArrowDown } from "react-icons/lu"
 import Link from "next/link"
 import { motion, AnimatePresence } from "framer-motion"
 import { AnimatedCounter } from "../components/AnimatedCounter"
@@ -35,7 +36,8 @@ const topics = [
   "SCIENZE & NATURA",
   "MEDICINA",
   "ARTE & CULTURA",
-  "ITALIA"
+  "ITALIA",
+  "STORIA"
 ]
 
 // Aggiungi un'interfaccia per gli autori con conteggio
@@ -52,6 +54,7 @@ export default function Articles() {
   
   const [searchQuery, setSearchQuery] = useState("")
   const [sortBy, setSortBy] = useState<'date' | 'upvote' | 'view' | 'shared'>('date')
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
   
   // Aggiungiamo uno stato per tenere traccia di quanti articoli mostrare
   const [displayLimit, setDisplayLimit] = useState(5);
@@ -255,12 +258,15 @@ export default function Articles() {
         case 'shared':
           return (b.shared || 0) - (a.shared || 0);
         default:
-          return new Date(b.creazione).getTime() - new Date(a.creazione).getTime();
+          // Per la data, usa la direzione di ordinamento
+          const dateA = new Date(a.creazione).getTime();
+          const dateB = new Date(b.creazione).getTime();
+          return sortDirection === 'desc' ? dateB - dateA : dateA - dateB;
       }
     });
   };
 
-  // Modifica gli stati
+  // Aggiungi questi stati
   const [authors, setAuthors] = useState<AuthorWithCount[]>([])
   const [selectedAuthors, setSelectedAuthors] = useState<string[]>([])
 
@@ -297,11 +303,14 @@ export default function Articles() {
           authorsSnapshot.forEach((childSnapshot) => {
             if (childSnapshot.val().name) {
               const authorName = childSnapshot.val().name;
-              // Includi il conteggio degli articoli se disponibile
-              authorsData.push({
-                name: authorName,
-                count: authorCounts[authorName] || 0
-              });
+              // Includi solo autori che hanno almeno un articolo accettato
+              const articleCount = authorCounts[authorName] || 0;
+              if (articleCount > 0) {
+                authorsData.push({
+                  name: authorName,
+                  count: articleCount
+                });
+              }
             }
           })
           
@@ -320,13 +329,15 @@ export default function Articles() {
     fetchAuthors()
   }, [])
 
-  // Aggiorna la funzione toggle per considerare solo il nome dell'autore
+  // Modifica la funzione toggle per selezionare un solo autore alla volta
   const toggleAuthor = (authorName: string) => {
-    setSelectedAuthors(prev => 
-      prev.includes(authorName) 
-        ? prev.filter(a => a !== authorName)
-        : [...prev, authorName]
-    )
+    if (selectedAuthors.includes(authorName)) {
+      // Se l'autore è già selezionato, deselezionalo
+      setSelectedAuthors([]);
+    } else {
+      // Altrimenti seleziona solo questo autore
+      setSelectedAuthors([authorName]);
+    }
   }
 
   // Modifica l'useEffect esistente per il filtraggio per includere anche gli autori
@@ -355,7 +366,7 @@ export default function Articles() {
     result = sortArticles(result);
     
     setFilteredArticles(result);
-  }, [selectedTags, selectedAuthors, articles, searchQuery, sortBy]);
+  }, [selectedTags, selectedAuthors, articles, searchQuery, sortBy, sortDirection]);
 
   const handleArticleClick = async (articleId: string) => {
     try {
@@ -502,7 +513,7 @@ export default function Articles() {
                       <span className="text-amber-500"> • Filtrati per tag</span>
                     )}
                     {selectedAuthors.length > 0 && (
-                      <span className="text-blue-500"> • Filtrati per autori</span>
+                      <span className="text-blue-500"> • Filtrato per autore</span>
                     )}
                     {searchQuery && (
                       <span className="text-amber-500"> • Ricerca attiva</span>
@@ -556,23 +567,34 @@ export default function Articles() {
           {/* Filtri di ordinamento */}
           <div className="flex flex-wrap justify-center gap-3 px-4">
             {[
-              { id: 'date', icon: FiClock, text: 'Più recenti' },
+              { id: 'date', icon: sortDirection === 'desc' ? LuClockArrowUp : LuClockArrowDown, text: sortDirection === 'desc' ? 'Più recenti' : 'Meno recenti' },
               { id: 'upvote', icon: FiHeart, text: 'Più piaciuti' },
               { id: 'view', icon: FiEye, text: 'Più visti' },
               { id: 'shared', icon: FiShare2, text: 'Più condivisi' }
             ].map((btn, index) => (
               <motion.button
                 key={btn.id}
-                onClick={() => setSortBy(btn.id as 'date' | 'upvote' | 'view' | 'shared')}
+                onClick={() => {
+                  if (sortBy === btn.id && btn.id === 'date') {
+                    // Se è già selezionato 'date', inverti la direzione
+                    setSortDirection(sortDirection === 'desc' ? 'asc' : 'desc');
+                  } else {
+                    // Altrimenti, imposta il nuovo sortBy e la direzione predefinita a 'desc'
+                    setSortBy(btn.id as 'date' | 'upvote' | 'view' | 'shared');
+                    setSortDirection('desc');
+                  }
+                }}
                 initial={{ y: 20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ duration: 0.5, delay: 0.8 + (index * 0.1) }}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
+                aria-label={btn.text}
+                title={btn.text}
                 className={`
-                  flex items-center gap-2 px-5 py-2.5 rounded-xl
+                  flex items-center gap-2 px-4 sm:px-5 py-2.5 rounded-xl
                   font-medium text-sm transition-all duration-300 cursor-pointer
-                  transform hover:scale-105 active:scale-100
+                  transform hover:scale-105 active:scale-100 h-10 sm:h-auto justify-center
                   ${sortBy === btn.id
                     ? `bg-gradient-to-r ${
                         btn.id === 'date' ? 'from-amber-500 to-amber-600 shadow-amber-500/25' :
@@ -585,13 +607,13 @@ export default function Articles() {
                 `}
               >
                 <btn.icon className={`h-4 w-4 ${sortBy === btn.id ? 'animate-pulse' : ''}`} />
-                {btn.text}
+                <span className="hidden sm:inline">{btn.text}</span>
               </motion.button>
             ))}
           </div>
 
           {/* Pulsante mostra/nascondi filtri e reset filtri */}
-          <div className="flex justify-center mt-4 gap-3">
+          <div className="flex justify-center mt-4">
             <motion.button
               onClick={() => setShowFilters(!showFilters)}
               initial={{ opacity: 0 }}
@@ -599,8 +621,10 @@ export default function Articles() {
               transition={{ duration: 0.5, delay: 1.1 }}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
+              aria-label={showFilters ? "Nascondi filtri avanzati" : "Mostra filtri avanzati"}
+              title={showFilters ? "Nascondi filtri avanzati" : "Mostra filtri avanzati"}
               className={`
-                flex items-center gap-2 px-5 py-2.5 rounded-xl
+                flex items-center gap-2 px-4 sm:px-5 py-2.5 ${(selectedTags.length > 0 || selectedAuthors.length > 0 || searchQuery) ? 'rounded-l-xl' : 'rounded-xl'} h-10 sm:h-auto justify-center
                 font-medium text-sm transition-all duration-300 cursor-pointer
                 transform hover:scale-105 active:scale-100
                 ${showFilters
@@ -611,64 +635,60 @@ export default function Articles() {
             >
               {showFilters ? (
                 <>
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                  Nascondi filtri avanzati
+                  <FiFilter className="h-4 w-4" />
+                  <span className="hidden sm:inline">Nascondi filtri avanzati</span>
                 </>
               ) : (
                 <>
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                  </svg>
-                  Mostra filtri avanzati
+                  <FiFilter className="h-4 w-4" />
+                  <span className="hidden sm:inline">Mostra filtri avanzati</span>
                 </>
               )}
             </motion.button>
             
             <AnimatePresence mode="wait">
-              {(selectedTags.length > 0 || selectedAuthors.length > 0 || searchQuery) && (
+              {(selectedTags.length > 0 || selectedAuthors.length > 0 || searchQuery) ? (
                 <motion.button
                   key="reset-filters"
                   onClick={() => {
                     setSelectedTags([]);
                     setSelectedAuthors([]);
                     setSearchQuery("");
+                    if (showFilters) {
+                      setShowFilters(false);
+                    }
                   }}
-                  initial={{ opacity: 0, width: 0, marginLeft: 0 }}
+                  initial={{ opacity: 0, width: 0 }}
                   animate={{ 
                     opacity: 1, 
-                    width: "auto", 
-                    marginLeft: "0.75rem",
+                    width: "auto",
                     transition: { 
                       opacity: { duration: 0.3, ease: "easeInOut" },
-                      width: { duration: 0.3, ease: "easeInOut" },
-                      marginLeft: { duration: 0.3, ease: "easeInOut" }
+                      width: { duration: 0.3, ease: "easeInOut" }
                     }
                   }}
                   exit={{ 
                     opacity: 0, 
-                    width: 0, 
-                    marginLeft: 0,
+                    width: 0,
                     transition: { 
                       opacity: { duration: 0.2, ease: "easeInOut" },
-                      width: { duration: 0.2, ease: "easeInOut", delay: 0.1 },
-                      marginLeft: { duration: 0.2, ease: "easeInOut" }
+                      width: { duration: 0.2, ease: "easeInOut", delay: 0.1 }
                     }
                   }}
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl
+                  aria-label="Rimuovi tutti i filtri"
+                  title="Rimuovi tutti i filtri"
+                  className="flex items-center gap-2 px-4 sm:px-5 py-2.5 rounded-r-xl h-10 sm:h-auto justify-center
                     font-medium text-sm transition-colors duration-300 cursor-pointer
                     whitespace-nowrap overflow-hidden
-                    bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg shadow-red-500/25"
+                    bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg shadow-red-500/25
+                    border-l border-white/10 dark:border-zinc-700/30"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                  <span className="flex-shrink-0">Rimuovi tutti i filtri</span>
+                  <LuFilterX className="h-4 w-4 flex-shrink-0" />
+                  <span className="hidden sm:inline flex-shrink-0">Rimuovi tutti i filtri</span>
                 </motion.button>
-              )}
+              ) : null}
             </AnimatePresence>
           </div>
         </motion.div>
@@ -694,12 +714,21 @@ export default function Articles() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-7xl mx-auto">
                 {/* Colonna per i tag */}
                 <div className="rounded-2xl bg-white/5 dark:bg-zinc-800/20 backdrop-blur-lg border border-white/10 p-4">
-                  <h3 className="text-zinc-800 dark:text-zinc-200 font-medium mb-3 flex items-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                    </svg>
-                    Filtra per categorie {selectedTags.length > 0 && `(${selectedTags.length})`}
-                  </h3>
+                  <div className="flex justify-between items-center mb-3">
+                    <h3 className="text-zinc-800 dark:text-zinc-200 font-medium flex items-center gap-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                      </svg>
+                      Filtra per categorie {selectedTags.length > 0 && `(${selectedTags.length})`}
+                    </h3>
+                    {selectedTags.length > 0 && (
+                      <LuFilterX 
+                        className="h-5 w-5 text-amber-500 cursor-pointer hover:text-amber-600 transition-colors duration-200" 
+                        onClick={() => setSelectedTags([])}
+                        title="Rimuovi filtri categoria"
+                      />
+                    )}
+                  </div>
                   
                   <div className="flex flex-wrap gap-2">
                     {topics.map((topic, index) => (
@@ -709,10 +738,19 @@ export default function Articles() {
                         initial={{ opacity: 0, scale: 0.9 }}
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ duration: 0.4, delay: 0.1 + (index * 0.02) }}
-                        whileHover={{ scale: 1.05, y: -2 }}
-                        whileTap={{ scale: 0.95 }}
+                        whileHover={{ 
+                          scale: 1.03, 
+                          y: -1,
+                          transition: { duration: 0.2 }
+                        }}
+                        whileTap={{ 
+                          scale: 0.97,
+                          transition: { duration: 0.1 }
+                        }}
+                        aria-label={topic}
+                        title={topic}
                         className={`
-                          flex items-center px-3 py-1.5 text-xs font-medium
+                          flex items-center px-2 sm:px-3 py-1.5 text-xs font-medium
                           rounded-xl transition-all duration-300 cursor-pointer
                           ${selectedTags.includes(topic)
                             ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-md shadow-amber-500/25'
@@ -721,38 +759,30 @@ export default function Articles() {
                           border border-white/10
                         `}
                       >
-                        {topic}
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                        </svg>
+                        <span>{topic}</span>
                       </motion.button>
                     ))}
                   </div>
-                  
-                  {selectedTags.length > 0 && (
-                    <motion.button
-                      onClick={() => setSelectedTags([])}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.5, delay: 0.3 }}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      className="mt-4 text-sm font-medium px-4 py-2 rounded-lg
-                        text-zinc-500 dark:text-zinc-400 hover:text-amber-500 dark:hover:text-amber-400 
-                        transition-all duration-300 hover:bg-white/10 dark:hover:bg-zinc-700/50
-                        bg-white/5 dark:bg-zinc-800/50 flex items-center justify-center gap-2"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                      Rimuovi filtri categoria
-                    </motion.button>
-                  )}
                 </div>
                 
                 {/* Colonna per gli autori con raggruppamento per iniziale */}
                 <div className="rounded-2xl bg-white/5 dark:bg-zinc-800/20 backdrop-blur-lg border border-white/10 p-4">
-                  <h3 className="text-zinc-800 dark:text-zinc-200 font-medium mb-3 flex items-center gap-2">
-                    <FiUser className="h-5 w-5 text-blue-500" />
-                    Filtra per autori {selectedAuthors.length > 0 && `(${selectedAuthors.length})`}
-                  </h3>
+                  <div className="flex justify-between items-center mb-3">
+                    <h3 className="text-zinc-800 dark:text-zinc-200 font-medium flex items-center gap-2">
+                      <FiUser className="h-5 w-5 text-blue-500" />
+                      Filtra per autore {selectedAuthors.length > 0 && `(${selectedAuthors[0]})`}
+                    </h3>
+                    {selectedAuthors.length > 0 && (
+                      <LuFilterX 
+                        className="h-5 w-5 text-blue-500 cursor-pointer hover:text-blue-600 transition-colors duration-200" 
+                        onClick={() => setSelectedAuthors([])}
+                        title="Rimuovi filtro autore"
+                      />
+                    )}
+                  </div>
                   
                   <div className="max-h-[240px] overflow-y-auto pr-2 custom-scrollbar">
                     {authors.length > 0 ? (
@@ -764,10 +794,19 @@ export default function Articles() {
                             initial={{ opacity: 0, scale: 0.9 }}
                             animate={{ opacity: 1, scale: 1 }}
                             transition={{ duration: 0.4, delay: 0.1 + (index * 0.02) }}
-                            whileHover={{ scale: 1.05, y: -2 }}
-                            whileTap={{ scale: 0.95 }}
+                            whileHover={{ 
+                              scale: 1.03, 
+                              y: -1,
+                              transition: { duration: 0.2 }
+                            }}
+                            whileTap={{ 
+                              scale: 0.97,
+                              transition: { duration: 0.1 }
+                            }}
+                            aria-label={author.name}
+                            title={`${author.name} (${author.count} articoli)`}
                             className={`
-                              flex items-center gap-2 px-3 py-1.5 text-xs font-medium
+                              flex items-center gap-1 px-2 sm:px-3 py-1.5 text-xs font-medium
                               rounded-xl transition-all duration-300 cursor-pointer
                               ${selectedAuthors.includes(author.name)
                                 ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md shadow-blue-500/25'
@@ -776,7 +815,7 @@ export default function Articles() {
                               border border-white/10
                             `}
                           >
-                            <FiUser className="h-3 w-3" />
+                            <FiUser className="h-3 w-3 mr-1" />
                             <span>{author.name}</span>
                             {author.count > 0 && (
                               <span className="ml-1 text-amber-500 font-medium">
@@ -792,26 +831,6 @@ export default function Articles() {
                       </div>
                     )}
                   </div>
-                  
-                  {selectedAuthors.length > 0 && (
-                    <motion.button
-                      onClick={() => setSelectedAuthors([])}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.5, delay: 0.3 }}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      className="mt-4 text-sm font-medium px-4 py-2 rounded-lg
-                        text-zinc-500 dark:text-zinc-400 hover:text-blue-500 dark:hover:text-blue-400 
-                        transition-all duration-300 hover:bg-white/10 dark:hover:bg-zinc-700/50
-                        bg-white/5 dark:bg-zinc-800/50 flex items-center justify-center gap-2"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                      Rimuovi filtri autore
-                    </motion.button>
-                  )}
                 </div>
               </div>
             </motion.div>

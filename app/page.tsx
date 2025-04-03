@@ -989,5 +989,6 @@ const topics = [
   "SCIENZE & NATURA",
   "MEDICINA",
   "ARTE & CULTURA",
-  "ITALIA"
+  "ITALIA",
+  "STORIA"
 ] 
