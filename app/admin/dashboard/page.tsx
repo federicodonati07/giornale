@@ -63,25 +63,26 @@ interface ChartDataset {
   pointBorderWidth?: number
 }
 
+// Interfaccia per gli articoli del formato API
+interface ApiArticle {
+  id?: string
+  uuid?: string
+  title?: string
+  titolo?: string
+  status?: string
+  createdAt?: string | number
+  creazione?: string | number
+  publishedAt?: string | number
+}
+
 interface ChartData {
   labels: string[]
   datasets: ChartDataset[]
   _detailedLabels?: string[] // Detailed labels for tooltips
 }
 
-// Registration data item interface
-interface RegistrationDataItem {
-  day?: number;
-  month: string;
-  year: number;
-  key: string;
-  count: number;
-  date?: Date;
-  isStartPoint?: boolean; // Added for initial point to show cumulative total
-}
-
 // Period options for time filtering
-type TimePeriod = 'day' | 'week' | 'month' | 'year' | 'all';
+type TimePeriod = 'month' | 'year' | 'all';
 
 // Format numbers with commas
 const formatNumber = (num: number) => {
@@ -117,6 +118,24 @@ const StatCard: React.FC<StatCardProps> = ({ title, value, icon, colorClass }) =
   </motion.div>
 );
 
+// Article interface
+interface Article {
+  id: string
+  title?: string
+  titolo?: string
+  status?: 'published' | 'review' | 'scheduled' | 'accepted' | string
+  createdAt: string | number
+  creazione?: string | number
+  publishedAt?: string | number
+  uuid?: string
+}
+
+// Helper function to safely get date from any item with createdAt or publishedAt
+// function getItemDate(item: User | Article): Date {
+//   // For articles, prioritize createdAt instead of publishedAt
+//   return new Date(item.createdAt || 0);
+// }
+
 export default function AdminDashboard() {
   const router = useRouter()
   // Stats state
@@ -143,11 +162,8 @@ export default function AdminDashboard() {
     datasets: []
   })
   
-  // Raw registration data (for filtering)
-  const [rawRegistrationData, setRawRegistrationData] = useState<RegistrationDataItem[]>([])
-  
   // Selected time period filter
-  const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>('all')
+  const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>('year')
   
   // Article stats data for graph
   const [articleData, setArticleData] = useState<ChartData>({
@@ -161,6 +177,9 @@ export default function AdminDashboard() {
   
   // Animation refs
   const countersAnimated = useRef(false)
+  
+  // Articles data for graph
+  const [articlesData, setArticlesData] = useState<Article[]>([])
   
   // CountUp animation
   const animateCounter = (start: number, end: number, setter: React.Dispatch<React.SetStateAction<number>>, duration = 2000) => {
@@ -246,87 +265,9 @@ export default function AdminDashboard() {
     checkUserAuth()
   }, [router])
   
-  // Process registration data based on selected time period
-  const processRegistrationData = (data: RegistrationDataItem[], period: TimePeriod) => {
-    if (!data || data.length === 0) return;
-
-    // Convert raw data strings to Date objects
-    const dataWithDates = data.map(item => {
-      // Parse month name to month number (0-11)
-      const months = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
-      const monthIndex = months.findIndex(m => item.month.startsWith(m));
-      
-      // Create a new date object
-      const dateObj = new Date(item.year, monthIndex, item.day || 1);
-      
-      return {
-        ...item,
-        date: dateObj
-      };
-    });
-
-    // Sort by date
-    dataWithDates.sort((a, b) => {
-      if (a.date && b.date) {
-        return a.date.getTime() - b.date.getTime();
-      }
-      return 0;
-    });
-
-    // Get the total users before filtering by period
-    // This will be used to start our chart at the correct cumulative value
-    let initialTotalUsers = 0;
-    
-    // Current date for filtering
-    const now = new Date();
-    
-    // Filter based on selected period
-    let filteredData = [...dataWithDates];
-    
-    if (period === 'day') {
-      // Last 24 hours
-      const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-      
-      // Calculate total users before this period
-      initialTotalUsers = dataWithDates
-        .filter(item => item.date && item.date < oneDayAgo)
-        .reduce((sum, item) => sum + item.count, 0);
-      
-      filteredData = dataWithDates.filter(item => item.date && item.date >= oneDayAgo);
-    } else if (period === 'week') {
-      // Last 7 days
-      const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      
-      // Calculate total users before this period
-      initialTotalUsers = dataWithDates
-        .filter(item => item.date && item.date < oneWeekAgo)
-        .reduce((sum, item) => sum + item.count, 0);
-      
-      filteredData = dataWithDates.filter(item => item.date && item.date >= oneWeekAgo);
-    } else if (period === 'month') {
-      // Last 30 days
-      const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-      
-      // Calculate total users before this period
-      initialTotalUsers = dataWithDates
-        .filter(item => item.date && item.date < oneMonthAgo)
-        .reduce((sum, item) => sum + item.count, 0);
-      
-      filteredData = dataWithDates.filter(item => item.date && item.date >= oneMonthAgo);
-    } else if (period === 'year') {
-      // Last 365 days
-      const oneYearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
-      
-      // Calculate total users before this period
-      initialTotalUsers = dataWithDates
-        .filter(item => item.date && item.date < oneYearAgo)
-        .reduce((sum, item) => sum + item.count, 0);
-      
-      filteredData = dataWithDates.filter(item => item.date && item.date >= oneYearAgo);
-    }
-    
-    // If no data found for the selected period, show empty chart with message
-    if (filteredData.length === 0) {
+  // Generate user registration chart data directly from user objects with article data
+  const generateUserRegistrationData = (users: User[], articles: Article[], period: TimePeriod) => {
+    if (!users || users.length === 0) {
       setUserRegData({
         labels: [],
         datasets: []
@@ -334,222 +275,247 @@ export default function AdminDashboard() {
       return;
     }
     
-    // If initialTotalUsers > 0, add a starting point to show the previous total
-    if (initialTotalUsers > 0 && filteredData.length > 0) {
-      // Create a starting point at the first filtered date, but with previous total
-      const firstItem = filteredData[0];
-      if (firstItem && firstItem.date) {
-        // Create a point just before the first filtered date (1 minute before)
-        const startDate = new Date(firstItem.date.getTime() - 60000);
+    // Current date for filtering
+    const now = new Date();
+    
+    // Create independent timelines for both users and articles
+    const userTimeline: {date: Date, count: number}[] = [];
+    const articleTimeline: {date: Date, count: number}[] = [];
+    
+    // Use all articles, not just accepted ones
+    const allArticles = articles;
+    
+    console.log("Total articles:", allArticles.length);
+    
+    // Filter based on selected period
+    let periodStartDate: Date | null = null;
+    
+    if (period === 'month') {
+      // Last 30 days
+      periodStartDate = new Date();
+      periodStartDate.setDate(now.getDate() - 30);
+    } else if (period === 'year') {
+      // Current year (Jan 1st to now)
+      periodStartDate = new Date(now.getFullYear(), 0, 1);
+    } else {
+      // All time - no filter
+      periodStartDate = null;
+    }
+    
+    // Process users
+    users.forEach(user => {
+      const userDate = new Date(user.createdAt || 0);
+      
+      // Apply period filter if needed
+      if (periodStartDate && userDate < periodStartDate) {
+        return;
+      }
+      
+      // Find or create entry
+      let entry = userTimeline.find(item => {
+        const itemDate = item.date;
+        return period === 'month' 
+          ? (itemDate.getFullYear() === userDate.getFullYear() && 
+             itemDate.getMonth() === userDate.getMonth() && 
+             itemDate.getDate() === userDate.getDate())
+          : (itemDate.getFullYear() === userDate.getFullYear() && 
+             itemDate.getMonth() === userDate.getMonth());
+      });
+      
+      if (!entry) {
+        // Create new entry with the appropriate date
+        entry = {
+          date: period === 'month' 
+            ? new Date(userDate.getFullYear(), userDate.getMonth(), userDate.getDate())
+            : new Date(userDate.getFullYear(), userDate.getMonth(), 15),
+          count: 0
+        };
+        userTimeline.push(entry);
+      }
+      
+      // Increment count
+      entry.count++;
+    });
+    
+    // Process articles - completely independent from users
+    allArticles.forEach(article => {
+      const articleDate = new Date(article.createdAt || 0);
+      
+      // Apply period filter if needed
+      if (periodStartDate && articleDate < periodStartDate) {
+        return;
+      }
+      
+      // Find or create entry
+      let entry = articleTimeline.find(item => {
+        const itemDate = item.date;
+        return period === 'month' 
+          ? (itemDate.getFullYear() === articleDate.getFullYear() && 
+             itemDate.getMonth() === articleDate.getMonth() && 
+             itemDate.getDate() === articleDate.getDate())
+          : (itemDate.getFullYear() === articleDate.getFullYear() && 
+             itemDate.getMonth() === articleDate.getMonth());
+      });
+      
+      if (!entry) {
+        // Create new entry with the appropriate date
+        entry = {
+          date: period === 'month' 
+            ? new Date(articleDate.getFullYear(), articleDate.getMonth(), articleDate.getDate())
+            : new Date(articleDate.getFullYear(), articleDate.getMonth(), 15),
+          count: 0
+        };
+        articleTimeline.push(entry);
+      }
+      
+      // Increment count
+      entry.count++;
+    });
+    
+    // Sort both timelines
+    userTimeline.sort((a, b) => a.date.getTime() - b.date.getTime());
+    articleTimeline.sort((a, b) => a.date.getTime() - b.date.getTime());
+    
+    // For year view, ensure all months are represented
+    if (period === 'year') {
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth();
+      
+      // Create all 12 months if not already in the timelines
+      for (let month = 0; month <= currentMonth; month++) {
+        // For user timeline
+        const userMonthEntry = userTimeline.find(entry => 
+          entry.date.getFullYear() === currentYear && entry.date.getMonth() === month
+        );
         
-        // Add this initial point to the filtered data
-        filteredData.unshift({
-          day: startDate.getDate(),
-          month: startDate.toLocaleString("it-IT", { month: "short" }),
-          year: startDate.getFullYear(),
-          key: `start-${startDate.getTime()}`,
-          count: 0, // This will be added to initialTotalUsers during cumulative calculation
-          date: startDate,
-          isStartPoint: true // Mark as a special starting point
+        if (!userMonthEntry) {
+          userTimeline.push({
+            date: new Date(currentYear, month, 15),
+            count: 0
+          });
+        }
+        
+        // For article timeline
+        const articleMonthEntry = articleTimeline.find(entry => 
+          entry.date.getFullYear() === currentYear && entry.date.getMonth() === month
+        );
+        
+        if (!articleMonthEntry) {
+          articleTimeline.push({
+            date: new Date(currentYear, month, 15),
+            count: 0
+          });
+        }
+      }
+      
+      // Re-sort both timelines
+      userTimeline.sort((a, b) => a.date.getTime() - b.date.getTime());
+      articleTimeline.sort((a, b) => a.date.getTime() - b.date.getTime());
+    }
+    
+    // Calculate cumulative counts
+    let cumulativeUserCount = 0;
+    const cumulativeUserCounts = userTimeline.map(point => {
+      cumulativeUserCount += point.count;
+      return cumulativeUserCount;
+    });
+    
+    let cumulativeArticleCount = 0;
+    const cumulativeArticleCounts = articleTimeline.map(point => {
+      cumulativeArticleCount += point.count;
+      return cumulativeArticleCount;
+    });
+    
+    // Generate labels based on the user timeline (we'll map article data to match these points)
+    const labels = userTimeline.map(point => {
+      if (period === 'month') {
+        // Show day and abbreviated month for monthly view (e.g. "15 Gen")
+        return point.date.toLocaleDateString('it-IT', { 
+          day: 'numeric',
+          month: 'short'
+        });
+      } else if (period === 'year') {
+        // For yearly view, group by month
+        return point.date.toLocaleDateString('it-IT', { month: 'long' });
+      } else {
+        // For all time, show month and year
+        return point.date.toLocaleDateString('it-IT', { 
+          month: 'short',
+          year: 'numeric'
         });
       }
-    }
-    
-    // Reduce data points for a more minimal look based on time period
-    let reducedData: RegistrationDataItem[] = [...filteredData];
-    if (period === 'month' && filteredData.length > 15) {
-      // For month view, group by every 2 days
-      const grouped: Record<string, RegistrationDataItem> = {};
-      
-      // Keep the initial point if it exists
-      if (filteredData.length > 0 && filteredData[0].isStartPoint) {
-        grouped['start'] = filteredData[0];
-      }
-      
-      filteredData.forEach((item, index) => {
-        // Skip the start point which is already added
-        if (index === 0 && item.isStartPoint) return;
-        
-        if (!item.date) return;
-        const dayGroup = Math.floor(item.date.getDate() / 2);
-        const key = `${item.year}-${item.month}-${dayGroup}`;
-        
-        if (!grouped[key]) {
-          grouped[key] = { 
-            ...item, 
-            count: 0
-          };
-        }
-        grouped[key].count += item.count;
-      });
-      
-      reducedData = Object.values(grouped);
-      // Sort by date
-      reducedData.sort((a, b) => {
-        // Keep start point at beginning
-        if (a.isStartPoint) return -1;
-        if (b.isStartPoint) return 1;
-        
-        if (a.date && b.date) return a.date.getTime() - b.date.getTime();
-        return 0;
-      });
-    } else if (period === 'year' && filteredData.length > 30) {
-      // For year view, group by every week
-      const grouped: Record<string, RegistrationDataItem> = {};
-      
-      // Keep the initial point if it exists
-      if (filteredData.length > 0 && filteredData[0].isStartPoint) {
-        grouped['start'] = filteredData[0];
-      }
-      
-      filteredData.forEach((item, index) => {
-        // Skip the start point which is already added
-        if (index === 0 && item.isStartPoint) return;
-        
-        if (!item.date) return;
-        // Get week number - safely convert to numbers
-        const firstDayOfYear = new Date(item.date.getFullYear(), 0, 1);
-        const pastDaysOfYear = Math.floor((item.date.getTime() - firstDayOfYear.getTime()) / 86400000);
-        const dayOfYear = firstDayOfYear.getDay(); // 0-6
-        const weekNum = Math.floor((pastDaysOfYear + dayOfYear + 1) / 7);
-        
-        const key = `${item.year}-${weekNum}`;
-        
-        if (!grouped[key]) {
-          grouped[key] = { 
-            ...item, 
-            count: 0
-          };
-        }
-        grouped[key].count += item.count;
-      });
-      
-      reducedData = Object.values(grouped);
-      // Sort by date
-      reducedData.sort((a, b) => {
-        // Keep start point at beginning
-        if (a.isStartPoint) return -1;
-        if (b.isStartPoint) return 1;
-        
-        if (a.date && b.date) return a.date.getTime() - b.date.getTime();
-        return 0;
-      });
-    } else if (period === 'all' && filteredData.length > 50) {
-      // For all-time view, group by month
-      const grouped: Record<string, RegistrationDataItem> = {};
-      
-      // Keep the initial point if it exists
-      if (filteredData.length > 0 && filteredData[0].isStartPoint) {
-        grouped['start'] = filteredData[0];
-      }
-      
-      filteredData.forEach((item, index) => {
-        // Skip the start point which is already added
-        if (index === 0 && item.isStartPoint) return;
-        
-        if (!item.date) return;
-        const key = `${item.year}-${item.month}`;
-        
-        if (!grouped[key]) {
-          grouped[key] = { 
-            ...item, 
-            count: 0,
-            day: 15 // Set to middle of month for better visualization
-          };
-          // Ensure date is set to middle of month
-          grouped[key].date = new Date(item.year, item.date.getMonth(), 15);
-        }
-        grouped[key].count += item.count;
-      });
-      
-      reducedData = Object.values(grouped);
-      // Sort by date
-      reducedData.sort((a, b) => {
-        // Keep start point at beginning
-        if (a.isStartPoint) return -1;
-        if (b.isStartPoint) return 1;
-        
-        if (a.date && b.date) return a.date.getTime() - b.date.getTime();
-        return 0;
-      });
-    }
-
-    // Calculate cumulative growth including initialTotalUsers
-    let totalUsers = initialTotalUsers;
-    const cumulativeCounts = reducedData.map(item => {
-      totalUsers += item.count;
-      return totalUsers;
-    });
-
-    // Format labels based on time period
-    const labels = reducedData.map((item) => {
-      if (!item.date) return '';
-      
-      // For the initial point, show "Totale precedente" instead of the date
-      if (item.isStartPoint) {
-        return 'Inizio periodo';
-      }
-      
-      // Format based on time period
-      if (period === 'day') {
-        // Show hours for daily view
-        return item.date.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
-      } else if (period === 'week') {
-        // Show day name and day number for weekly view (e.g. "Lun 15")
-        const dayName = item.date.toLocaleDateString('it-IT', { weekday: 'short' });
-        const dayNum = item.date.getDate();
-        return `${dayName} ${dayNum}`;
-      } else if (period === 'month') {
-        // Show day and abbreviated month for monthly view (e.g. "15 Gen")
-        const day = item.date.getDate();
-        const month = item.date.toLocaleDateString('it-IT', { month: 'short' });
-        return `${day} ${month}`;
-      } else if (period === 'year') {
-        // Show month name for yearly view
-        return item.date.toLocaleDateString('it-IT', { month: 'long' });
-      } else {
-        // Show month and year for all time
-        return item.date.toLocaleDateString('it-IT', { month: 'short', year: 'numeric' });
-      }
     });
     
-    // Create a more detailed labels array for tooltips
-    const detailedLabels = reducedData.map((item, index) => {
-      if (!item.date) return '';
+    // Generate detailed tooltip labels
+    const detailedLabels = userTimeline.map((point, index) => {
+      // Find matching article data point
+      const articleMatch = articleTimeline.find(a => 
+        period === 'month'
+          ? (a.date.getFullYear() === point.date.getFullYear() && 
+             a.date.getMonth() === point.date.getMonth() && 
+             a.date.getDate() === point.date.getDate())
+          : (a.date.getFullYear() === point.date.getFullYear() && 
+             a.date.getMonth() === point.date.getMonth())
+      );
       
-      // Special handling for initial point
-      if (item.isStartPoint) {
-        return `Totale utenti all'inizio del periodo: ${cumulativeCounts[index]}`;
-      }
+      const articleCount = articleMatch ? cumulativeArticleCounts[articleTimeline.indexOf(articleMatch)] : 0;
       
-      // Full format for tooltips - include date and cumulative count
-      const dateFormat = period === 'day' 
-        ? item.date.toLocaleString('it-IT', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-        : item.date.toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' });
-      
-      return `${dateFormat} - Totale utenti: ${cumulativeCounts[index]}`;
+      // Format date and show cumulative counts
+      return `${point.date.toLocaleDateString('it-IT', { 
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      })}:\nUtenti: ${cumulativeUserCounts[index]}\nArticoli: ${articleCount}`;
     });
     
-    // Update chart data
+    // Map article data to match user timeline points
+    const articleDataPoints = userTimeline.map(userPoint => {
+      // Find matching article data point
+      const articleMatch = articleTimeline.find(a => 
+        period === 'month'
+          ? (a.date.getFullYear() === userPoint.date.getFullYear() && 
+             a.date.getMonth() === userPoint.date.getMonth() && 
+             a.date.getDate() === userPoint.date.getDate())
+          : (a.date.getFullYear() === userPoint.date.getFullYear() && 
+             a.date.getMonth() === userPoint.date.getMonth())
+      );
+      
+      return articleMatch ? cumulativeArticleCounts[articleTimeline.indexOf(articleMatch)] : 0;
+    });
+    
+    // Create the final chart data
     setUserRegData({
       labels,
       datasets: [
         {
           label: 'Utenti Totali',
-          data: cumulativeCounts,
+          data: cumulativeUserCounts,
           fill: true,
           backgroundColor: 'rgba(147, 51, 234, 0.2)',
           borderColor: 'rgba(147, 51, 234, 1)',
-          tension: 0.4, // Increased for smoother curve
+          tension: 0.4,
           borderWidth: 2,
-          pointRadius: 0, // Hide points for a cleaner look
-          pointHoverRadius: 4, // Show points on hover
+          pointRadius: period === 'month' && userTimeline.length > 10 ? 0 : 3,
+          pointHoverRadius: 5,
           pointBackgroundColor: 'white',
           pointBorderColor: 'rgba(147, 51, 234, 1)',
           pointBorderWidth: 2,
         },
+        {
+          label: 'Articoli Pubblicati',
+          data: articleDataPoints,
+          fill: true,
+          backgroundColor: 'rgba(20, 184, 166, 0.2)',
+          borderColor: 'rgba(20, 184, 166, 1)',
+          tension: 0.4,
+          borderWidth: 2,
+          pointRadius: period === 'month' && articleTimeline.length > 10 ? 0 : 3,
+          pointHoverRadius: 5,
+          pointBackgroundColor: 'white',
+          pointBorderColor: 'rgba(20, 184, 166, 1)',
+          pointBorderWidth: 2,
+        }
       ],
-      // Store detailed labels for tooltips
       _detailedLabels: detailedLabels
     });
   };
@@ -558,6 +524,37 @@ export default function AdminDashboard() {
   const fetchData = async () => {
     setLoading(true);
     try {
+      // Get articles directly from Firebase
+      const articlesRef = ref(db, 'articoli');
+      const articlesSnapshot = await get(articlesRef);
+      
+      interface FirebaseArticle {
+        creazione?: number | string;
+        titolo?: string;
+        status?: string;
+        contenuto?: string;
+        categoria?: string;
+        tags?: string[];
+        autore?: string;
+        pubblicazione?: number | string;
+      }
+      
+      let articles: Article[] = [];
+      let totalArticles = 0;
+      
+      if (articlesSnapshot.exists()) {
+        const articlesData = articlesSnapshot.val() as Record<string, FirebaseArticle>;
+        articles = Object.entries(articlesData).map(([uuid, data]) => ({
+          id: uuid,
+          uuid: uuid,
+          ...data,
+          createdAt: data.creazione || new Date().getTime(),
+          creazione: data.creazione || new Date().getTime()
+        }));
+        totalArticles = articles.length;
+        console.log("Articles from Firebase:", articles);
+      }
+
       const response = await fetch('/api/dashboard');
       const data = await response.json();
       
@@ -570,15 +567,14 @@ export default function AdminDashboard() {
       
       // Extract stats values with fallbacks
       const totalUsersVal = data.stats?.totalUsers || 0;
-      const totalArticlesVal = data.stats?.totalArticles || 0;
+      const totalArticlesVal = totalArticles; // Use the count from Firebase
       const totalViewsVal = data.stats?.totalViews || 0;
       const totalLikesVal = data.stats?.totalLikes || 0;
       const totalSharesVal = data.stats?.totalShares || 0;
       
       // Set all users, not just recent ones
       if (data.users && data.users.length > 0) {
-        // Use ALL users from the API
-        setRecentUsers(data.users.map((user: {
+        const usersWithDateObj = data.users.map((user: {
           id: string;
           displayName?: string;
           email?: string;
@@ -591,10 +587,21 @@ export default function AdminDashboard() {
           email: user.email || 'Email non disponibile',
           createdAt: user.createdAt || new Date().toISOString(),
           provider: user.provider || 'Email'
-        })));
+        }));
+        
+        setRecentUsers(usersWithDateObj);
+        
+        // Use articles from Firebase
+        if (articles.length > 0) {
+          console.log("Total articles from Firebase:", articles.length);
+          setArticlesData(articles);
+          generateUserRegistrationData(usersWithDateObj, articles, selectedPeriod);
+        } else {
+          generateUserRegistrationData(usersWithDateObj, [], selectedPeriod);
+        }
       } else if (data.recentUsers && data.recentUsers.length > 0) {
         // Fallback to recentUsers if users array is not available
-        setRecentUsers(data.recentUsers.map((user: {
+        const usersWithDateObj = data.recentUsers.map((user: {
           id: string;
           displayName?: string;
           email?: string;
@@ -607,54 +614,38 @@ export default function AdminDashboard() {
           email: user.email || 'Email non disponibile',
           createdAt: user.createdAt || new Date().toISOString(),
           provider: user.provider || 'Email'
-        })));
+        }));
+        
+        setRecentUsers(usersWithDateObj);
+        
+        // Store articles data
+        if (data.articles && data.articles.length > 0) {
+          // Log the articles data to debug
+          console.log("All articles data:", data.articles);
+          
+          // Map all articles without filtering by status
+          const allArticles = data.articles
+            .map((article: ApiArticle) => ({
+              id: article.id || article.uuid || '',
+              title: article.title || article.titolo || 'Articolo senza titolo',
+              status: article.status || 'review',
+              createdAt: article.createdAt || article.creazione || new Date().toISOString(),
+              publishedAt: article.publishedAt || article.createdAt || article.creazione || new Date().toISOString()
+            }));
+          
+          setArticlesData(allArticles);
+          
+          // Generate registration chart data with articles
+          generateUserRegistrationData(usersWithDateObj, allArticles, selectedPeriod);
+        } else {
+          // Generate registration chart data without articles
+          generateUserRegistrationData(usersWithDateObj, [], selectedPeriod);
+        }
       } else {
         console.warn("No users data received from API");
         setRecentUsers([]);
-      }
-      
-      // Process registration data for the line chart
-      if (data.enhancedRegistrationChartData && data.enhancedRegistrationChartData.length > 0) {
-        console.log('Using enhanced registration data with day-level information');
         
-        // Store the enhanced data with day-level details
-        const enhancedData = data.enhancedRegistrationChartData.map((item: {
-          day: number;
-          month: string;
-          year: number;
-          key: string;
-          count: number;
-        }) => ({
-          ...item,
-          // day is already included in the enhanced data
-        }));
-        
-        setRawRegistrationData(enhancedData);
-        
-        // Initial processing with all data
-        processRegistrationData(enhancedData, selectedPeriod);
-      } else if (data.registrationChartData && data.registrationChartData.length > 0) {
-        // Fallback to monthly data if enhanced data is not available
-        console.log('Falling back to monthly registration data');
-        
-        const rawData = data.registrationChartData.map((item: {
-          day?: number;
-          month: string;
-          year: number;
-          key: string;
-          count: number;
-        }) => ({
-          ...item,
-          day: item.day || 1 // Default to 1st day if day is not provided
-        }));
-        
-        setRawRegistrationData(rawData);
-        
-        // Initial processing with all data
-        processRegistrationData(rawData, selectedPeriod);
-      } else {
-        console.warn("No registration data received from API, using fallback");
-        // Fallback empty chart data
+        // Empty chart data
         setUserRegData({
           labels: [],
           datasets: []
@@ -814,10 +805,10 @@ export default function AdminDashboard() {
   
   // Update chart when time period changes
   useEffect(() => {
-    if (rawRegistrationData.length > 0) {
-      processRegistrationData(rawRegistrationData, selectedPeriod);
+    if (recentUsers.length > 0) {
+      generateUserRegistrationData(recentUsers, articlesData, selectedPeriod);
     }
-  }, [selectedPeriod, rawRegistrationData]);
+  }, [selectedPeriod, recentUsers, articlesData]);
   
   // Don't render until auth is checked
   if (!authChecked || !isAuthorized) {
@@ -903,8 +894,6 @@ export default function AdminDashboard() {
                 <span className="text-sm text-zinc-500 dark:text-zinc-400">Periodo:</span>
                 <div className="flex bg-zinc-100 dark:bg-zinc-700 rounded-lg p-1">
                   {[
-                    { id: 'day', label: 'Giorno' },
-                    { id: 'week', label: 'Settimana' },
                     { id: 'month', label: 'Mese' },
                     { id: 'year', label: 'Anno' },
                     { id: 'all', label: 'Tutti' },
@@ -971,7 +960,7 @@ export default function AdminDashboard() {
                       },
                       scales: {
                         y: {
-                          beginAtZero: false, // Don't start at zero to better show cumulative growth
+                          beginAtZero: true, // Start at zero for better readability
                           ticks: {
                             color: 'rgb(156, 163, 175)',
                             precision: 0, // Only show integers
@@ -1012,9 +1001,7 @@ export default function AdminDashboard() {
                           },
                           title: {
                             display: true,
-                            text: selectedPeriod === 'day' ? 'Orario' : 
-                                  selectedPeriod === 'week' ? 'Giorno' : 
-                                  selectedPeriod === 'month' ? 'Giorno del mese' : 
+                            text: selectedPeriod === 'month' ? 'Giorno del mese' : 
                                   selectedPeriod === 'year' ? 'Mese' : 'Data',
                             color: 'rgb(156, 163, 175)',
                             font: {
