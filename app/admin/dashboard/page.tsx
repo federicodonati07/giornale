@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { motion } from "framer-motion"
-import { ref, get } from "firebase/database"
+import { ref, get, onValue } from "firebase/database"
 import { db } from "@/app/firebase"
 import { FiUsers, FiEye, FiHeart, FiShare2, FiFile, FiCalendar, FiMail } from "react-icons/fi"
 import { Line, Pie } from "react-chartjs-2"
@@ -130,11 +130,25 @@ interface Article {
   uuid?: string
 }
 
-// Helper function to safely get date from any item with createdAt or publishedAt
-// function getItemDate(item: User | Article): Date {
-//   // For articles, prioritize createdAt instead of publishedAt
-//   return new Date(item.createdAt || 0);
-// }
+// Firebase data interfaces
+interface FirebaseUser {
+  displayName?: string
+  email?: string
+  createdAt?: number | string
+  role?: string
+  provider?: string
+}
+
+interface FirebaseArticle {
+  creazione?: number | string
+  titolo?: string
+  status?: string
+  contenuto?: string
+  categoria?: string
+  tags?: string[]
+  autore?: string
+  pubblicazione?: number | string
+}
 
 export default function AdminDashboard() {
   const router = useRouter()
@@ -528,17 +542,6 @@ export default function AdminDashboard() {
       const articlesRef = ref(db, 'articoli');
       const articlesSnapshot = await get(articlesRef);
       
-      interface FirebaseArticle {
-        creazione?: number | string;
-        titolo?: string;
-        status?: string;
-        contenuto?: string;
-        categoria?: string;
-        tags?: string[];
-        autore?: string;
-        pubblicazione?: number | string;
-      }
-      
       let articles: Article[] = [];
       let totalArticles = 0;
       
@@ -809,6 +812,283 @@ export default function AdminDashboard() {
       generateUserRegistrationData(recentUsers, articlesData, selectedPeriod);
     }
   }, [selectedPeriod, recentUsers, articlesData]);
+  
+  // Real-time listener for articles
+  useEffect(() => {
+    const articlesRef = ref(db, 'articoli');
+    const unsubscribe = onValue(articlesRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const articlesData = snapshot.val() as Record<string, FirebaseArticle>;
+        
+        // Debug articles data
+        console.log("Raw articles data from Firebase:", articlesData);
+        
+        const articles = Object.entries(articlesData).map(([uuid, data]) => {
+          // Ensure we're properly handling creazione timestamp
+          const creationTimestamp = data.creazione || 0;
+          let creationDate: number;
+          
+          // Handle different timestamp formats
+          if (typeof creationTimestamp === 'number') {
+            // Already a number (milliseconds)
+            creationDate = creationTimestamp;
+          } else if (typeof creationTimestamp === 'string') {
+            // Try to parse string timestamp
+            const parsedTime = Date.parse(creationTimestamp);
+            creationDate = isNaN(parsedTime) ? Date.now() : parsedTime;
+          } else {
+            // Fallback to current time
+            creationDate = Date.now();
+          }
+          
+          return {
+            id: uuid,
+            uuid: uuid,
+            title: data.titolo,
+            status: data.status,
+            createdAt: creationDate,
+            creazione: creationDate,
+            publishedAt: typeof data.pubblicazione === 'number' ? data.pubblicazione : creationDate
+          };
+        });
+        
+        // Sort articles by creation date
+        articles.sort((a, b) => a.createdAt - b.createdAt);
+        
+        // Debug processed articles
+        console.log("Processed articles with creation dates:", articles.map(a => ({
+          id: a.id,
+          title: a.title,
+          createdAt: new Date(a.createdAt).toISOString()
+        })));
+        
+        setArticlesData(articles);
+        setDisplayedArticles(articles.length);
+
+        if (recentUsers.length > 0) {
+          // Create simple chart data without complex processing functions
+          const now = new Date();
+          let startDate: Date;
+          const datePoints: Date[] = [];
+          
+          // Prepare time range based on period
+          if (selectedPeriod === 'month') {
+            // Last 30 days
+            startDate = new Date();
+            startDate.setDate(startDate.getDate() - 30);
+            startDate.setHours(0, 0, 0, 0);
+            
+            // One point per day
+            for (let i = 0; i <= 30; i++) {
+              const date = new Date(startDate);
+              date.setDate(date.getDate() + i);
+              date.setHours(0, 0, 0, 0); // Ensure time is set to midnight
+              datePoints.push(date);
+            }
+          } else if (selectedPeriod === 'year') {
+            // Current year
+            startDate = new Date(now.getFullYear(), 0, 1);
+            startDate.setHours(0, 0, 0, 0);
+            
+            // One point per month
+            for (let i = 0; i <= now.getMonth(); i++) {
+              const date = new Date(now.getFullYear(), i, 1);
+              date.setHours(0, 0, 0, 0);
+              datePoints.push(date);
+            }
+          } else {
+            // All time - find earliest date between users and articles
+            const sortedArticles = [...articles];
+            const sortedUsers = [...recentUsers];
+            
+            if (sortedArticles.length > 0 && sortedUsers.length > 0) {
+              const earliestArticleDate = new Date(sortedArticles[0].createdAt);
+              const earliestUserDate = new Date(sortedUsers[0].createdAt);
+              
+              // Use the earliest date between both
+              startDate = earliestArticleDate < earliestUserDate ? 
+                earliestArticleDate : earliestUserDate;
+              
+              // Round to first of month
+              startDate = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+              startDate.setHours(0, 0, 0, 0);
+              
+              // Create points for each month from start to now
+              const endDate = new Date();
+              let currentDate = new Date(startDate);
+              
+              while (currentDate <= endDate) {
+                datePoints.push(new Date(currentDate));
+                // Move to next month
+                currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
+              }
+            }
+          }
+          
+          // Create data series for both users and articles
+          const labels = datePoints.map(date => {
+            if (selectedPeriod === 'month') {
+              return date.toLocaleDateString('it-IT', { 
+                day: 'numeric',
+                month: 'short'
+              });
+            } else if (selectedPeriod === 'year') {
+              return date.toLocaleDateString('it-IT', { month: 'long' });
+            } else {
+              return date.toLocaleDateString('it-IT', { 
+                month: 'short',
+                year: 'numeric'
+              });
+            }
+          });
+          
+          // Calculate new articles at each point
+          const newArticlesByDate = datePoints.map(date => {
+            // Get next date for range calculation
+            const nextDate = new Date(date);
+            if (selectedPeriod === 'month') {
+              nextDate.setDate(nextDate.getDate() + 1);
+            } else {
+              nextDate.setMonth(nextDate.getMonth() + 1);
+            }
+            
+            // Count articles in this date range
+            const articlesInPeriod = articles.filter(article => {
+              const articleDate = new Date(article.createdAt);
+              return articleDate >= date && articleDate < nextDate;
+            });
+            
+            // Debug articles in this period
+            if (articlesInPeriod.length > 0) {
+              console.log(`Found ${articlesInPeriod.length} articles in period:`, 
+                date.toISOString(), ' to ', nextDate.toISOString(),
+                articlesInPeriod.map(a => new Date(a.createdAt).toISOString())
+              );
+            }
+            
+            return articlesInPeriod.length;
+          });
+          
+          // Calculate cumulative article counts
+          const cumulativeArticlesByDate = newArticlesByDate.reduce((acc, count, index) => {
+            // Add current count to previous cumulative total
+            const total = index === 0 ? count : acc[index - 1] + count;
+            acc.push(total);
+            return acc;
+          }, [] as number[]);
+          
+          // Calculate new users at each point
+          const newUsersByDate = datePoints.map(date => {
+            // Get next date for range calculation
+            const nextDate = new Date(date);
+            if (selectedPeriod === 'month') {
+              nextDate.setDate(nextDate.getDate() + 1);
+            } else {
+              nextDate.setMonth(nextDate.getMonth() + 1);
+            }
+            
+            // Count users in this date range
+            return recentUsers.filter(user => {
+              const userDate = new Date(user.createdAt);
+              return userDate >= date && userDate < nextDate;
+            }).length;
+          });
+          
+          // Calculate cumulative user counts
+          const cumulativeUsersByDate = newUsersByDate.reduce((acc, count, index) => {
+            // Add current count to previous cumulative total
+            const total = index === 0 ? count : acc[index - 1] + count;
+            acc.push(total);
+            return acc;
+          }, [] as number[]);
+          
+          // Create tooltip labels with both new and cumulative counts
+          const detailedLabels = datePoints.map((date, i) => {
+            return `${date.toLocaleDateString('it-IT', { 
+              day: 'numeric',
+              month: 'long',
+              year: 'numeric'
+            })}:\nNuovi Utenti: ${newUsersByDate[i]} (Totale: ${cumulativeUsersByDate[i]})\nNuovi Articoli: ${newArticlesByDate[i]} (Totale: ${cumulativeArticlesByDate[i]})`;
+          });
+          
+          // Update chart data
+          setUserRegData({
+            labels,
+            datasets: [
+              {
+                label: 'Utenti Totali',
+                data: cumulativeUsersByDate,
+                backgroundColor: 'rgba(147, 51, 234, 0.2)',
+                borderColor: 'rgba(147, 51, 234, 1)',
+                tension: 0.4,
+                borderWidth: 2,
+                pointRadius: selectedPeriod === 'month' && datePoints.length > 10 ? 0 : 3,
+                pointHoverRadius: 5,
+                pointBackgroundColor: 'white',
+                pointBorderColor: 'rgba(147, 51, 234, 1)',
+                pointBorderWidth: 2,
+              },
+              {
+                label: 'Articoli Totali',
+                data: cumulativeArticlesByDate,
+                backgroundColor: 'rgba(20, 184, 166, 0.2)',
+                borderColor: 'rgba(20, 184, 166, 1)',
+                tension: 0.4,
+                borderWidth: 2,
+                pointRadius: selectedPeriod === 'month' && datePoints.length > 10 ? 0 : 3,
+                pointHoverRadius: 5,
+                pointBackgroundColor: 'white',
+                pointBorderColor: 'rgba(20, 184, 166, 1)',
+                pointBorderWidth: 2,
+              }
+            ],
+            _detailedLabels: detailedLabels
+          });
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, [recentUsers, selectedPeriod]);
+
+  // Real-time listener for users
+  useEffect(() => {
+    const usersRef = ref(db, 'users');
+    const unsubscribe = onValue(usersRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const usersData = snapshot.val() as Record<string, FirebaseUser>;
+        const users = Object.entries(usersData).map(([id, data]) => ({
+          id,
+          displayName: data.displayName || 'Utente senza nome',
+          email: data.email || 'Email non disponibile',
+          createdAt: typeof data.createdAt === 'number' ? data.createdAt : Date.now(),
+          role: data.role || 'utente',
+          provider: data.provider || 'Email'
+        }));
+        
+        setRecentUsers(users);
+        setDisplayedUsers(users.length); // Update counter in real-time
+        generateUserRegistrationData(users, articlesData, selectedPeriod);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [articlesData, selectedPeriod]);
+
+  // Add real-time listener for views, likes and shares
+  useEffect(() => {
+    const statsRef = ref(db, 'stats');
+    const unsubscribe = onValue(statsRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const stats = snapshot.val();
+        if (stats.views) setDisplayedViews(stats.views);
+        if (stats.likes) setDisplayedLikes(stats.likes);
+        if (stats.shares) setDisplayedShares(stats.shares);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
   
   // Don't render until auth is checked
   if (!authChecked || !isAuthorized) {
